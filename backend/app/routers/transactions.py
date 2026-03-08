@@ -24,6 +24,7 @@ class TransactionUpdate(BaseModel):
     category_id: Optional[int] = None
     notes: Optional[str] = None
     tags: Optional[str] = None
+    tags_meta: Optional[str] = None  # JSON: [{"name": "food", "type": "manual"|"auto"}]
     is_recurring: Optional[bool] = None
 
 
@@ -148,9 +149,11 @@ def update_transaction(txn_id: int, body: TransactionUpdate, db: Session = Depen
         raise HTTPException(404, "Transaction not found")
 
     changes = body.dict(exclude_unset=True)
+    import json as _json
+
     for field, val in changes.items():
         # special handling for metadata fields
-        if field in ("category_id", "tags"):
+        if field in ("category_id", "tags", "tags_meta"):
             # get or create metadata row
             meta = db.query(TransactionMetadata).filter(TransactionMetadata.transaction_hash == txn.transaction_hash).first()
             old_val = getattr(meta, field) if meta else None
@@ -165,17 +168,28 @@ def update_transaction(txn_id: int, body: TransactionUpdate, db: Session = Depen
                         summary=f"Category changed from '{old_name}' to '{new_name}' on txn #{txn_id}: {txn.description}",
                         details=f'{{"transaction_id": {txn_id}, "field": "category_id", "old": "{old_name}", "new": "{new_name}"}}',
                     ))
-                else:
+                elif field == "tags":
                     db.add(AuditLog(
                         event_type="field_change",
-                        summary=f"{field} changed on txn #{txn_id}: {txn.description}",
-                        details=f'{{"transaction_id": {txn_id}, "field": "{field}", "old": "{old_val}", "new": "{val}"}}',
+                        summary=f"tags changed on txn #{txn_id}: {txn.description}",
+                        details=f'{{"transaction_id": {txn_id}, "field": "tags", "old": "{old_val}", "new": "{val}"}}',
                     ))
                 if not meta:
                     meta = TransactionMetadata(transaction_hash=txn.transaction_hash)
                     db.add(meta)
                     db.flush()
                 setattr(meta, field, val)
+                # When tags change and tags_meta not explicitly provided, rebuild tags_meta as all-manual
+                if field == "tags" and "tags_meta" not in changes:
+                    tag_list = [t.strip() for t in (val or '').split(',') if t.strip()]
+                    # preserve existing types for tags that already exist
+                    existing_types: dict = {}
+                    try:
+                        existing_types = {e["name"]: e["type"] for e in _json.loads(old_val or '[]') if isinstance(e, dict)} if old_val else {}
+                    except Exception:
+                        pass
+                    new_meta = [{"name": t, "type": existing_types.get(t, "manual")} for t in tag_list]
+                    meta.tags_meta = _json.dumps(new_meta)
         else:
             old_val = getattr(txn, field)
             if old_val != val:
@@ -208,6 +222,12 @@ def delete_transaction(txn_id: int, db: Session = Depends(get_db)):
 
 
 def _serialize(t: Transaction, account_glyph: Optional[str] = None) -> dict:
+    import json as _json
+    raw_meta = (t.metadata_record.tags_meta if t.metadata_record else None)
+    try:
+        tags_meta = _json.loads(raw_meta) if raw_meta else []
+    except Exception:
+        tags_meta = []
     return {
         "id": t.id,
         "transaction_hash": t.transaction_hash,
@@ -224,6 +244,7 @@ def _serialize(t: Transaction, account_glyph: Optional[str] = None) -> dict:
         "year": t.year,
         "is_recurring": t.is_recurring,
         "tags": (t.metadata_record.tags if t.metadata_record else None),
+        "tags_meta": tags_meta,
         "notes": t.notes,
         "created_at": t.created_at.isoformat() if t.created_at else None,
     }

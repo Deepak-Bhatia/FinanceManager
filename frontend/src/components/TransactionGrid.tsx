@@ -271,9 +271,19 @@ export default function TransactionGrid({
                       />
                     ) : (
                       <div className="flex flex-wrap gap-1">
-                        {(t.tags || '').split(',').filter(Boolean).map((tag: string, idx: number) => (
-                          <span key={idx} className="bg-blue-700 text-white px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 truncate max-w-[80px]">{tag.trim()}</span>
-                        ))}
+                        {(() => {
+                          const meta: {name: string, type: string}[] = t.tags_meta || [];
+                          const typeOf = (name: string) => meta.find(m => m.name === name.trim())?.type || 'manual';
+                          return (t.tags || '').split(',').filter(Boolean).map((tag: string, idx: number) => {
+                            const isAuto = typeOf(tag) === 'auto';
+                            return (
+                              <span key={idx} className={`px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 max-w-[100px] ${isAuto ? 'bg-purple-700/80 text-white' : 'bg-blue-700 text-white'}`} title={isAuto ? 'Auto-generated' : 'User-added'}>
+                                <span className="text-[9px] opacity-80 flex-shrink-0">{isAuto ? '⚙' : '👤'}</span>
+                                <span className="truncate">{tag.trim()}</span>
+                              </span>
+                            );
+                          });
+                        })()}
                       </div>
                     )}
                   </td>

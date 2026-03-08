@@ -54,6 +54,13 @@ export const getAuditLogs = (params: Record<string, any>) =>
 // Accounts
 export const patchAccount = (id: number, data: { glyph?: string }) =>
   api.patch(`/accounts/${id}`, data).then(r => r.data);
+
+// Tags
+export const getTags = () => api.get('/tags').then(r => r.data);
+export const patchTag = (name: string, data: { type: string }) =>
+  api.patch(`/tags/${encodeURIComponent(name)}`, data).then(r => r.data);
+export const deleteTag = (name: string) =>
+  api.delete(`/tags/${encodeURIComponent(name)}`).then(r => r.data);
 export const listBackups = () => api.get('/backup/list').then(r => r.data);
 export const createBackup = () => api.post('/backup/create').then(r => r.data);
 export const restoreBackup = (name: string) => api.post(`/backup/restore/${encodeURIComponent(name)}`).then(r => r.data);

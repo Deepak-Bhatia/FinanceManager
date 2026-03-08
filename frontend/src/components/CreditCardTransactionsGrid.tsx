@@ -36,11 +36,17 @@ export default function CreditCardTransactionsGrid({ cycle, accountId }: { cycle
 
   const saveEditing = async () => {
     if (editingId === null) return;
-    await updateTransaction(editingId, { category_id: editCatId, tags: editTags });
+    const existingMeta: Record<string, string> = {};
+    (data.items.find((t: any) => t.id === editingId)?.tags_meta || []).forEach((m: any) => {
+      existingMeta[m.name] = m.type;
+    });
+    const tagsList = editTags.split(',').map((t: string) => t.trim()).filter(Boolean);
+    const newTagsMeta = JSON.stringify(tagsList.map(name => ({ name, type: existingMeta[name] || 'manual' })));
+    await updateTransaction(editingId, { category_id: editCatId, tags: editTags, tags_meta: newTagsMeta });
     setData((prev: any) => ({
       ...prev,
       items: prev.items.map((t: any) =>
-        t.id === editingId ? { ...t, category_id: editCatId, tags: editTags } : t
+        t.id === editingId ? { ...t, category_id: editCatId, tags: editTags, tags_meta: JSON.parse(newTagsMeta) } : t
       ),
     }));
     setEditingId(null);

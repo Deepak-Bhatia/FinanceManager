@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Receipt, FolderUp, Tags, CreditCard, CalendarClock, Wallet, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, Receipt, FolderUp, Tags, CreditCard, CalendarClock, Wallet, ClipboardList, Tag } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Upload from './pages/Upload';
@@ -8,6 +8,7 @@ import CreditCards from './pages/CreditCards';
 import EMIs from './pages/EMIs';
 import CardDetails from './pages/CardDetails';
 import Audit from './pages/Audit';
+import TagsPage from './pages/Tags';
 
 function App() {
   const navItems = [
@@ -18,6 +19,7 @@ function App() {
     { to: '/transactions', icon: Receipt, label: 'Transactions' },
     { to: '/upload', icon: FolderUp, label: 'Import' },
     { to: '/categories', icon: Tags, label: 'Categories' },
+    { to: '/tags', icon: Tag, label: 'Tags' },
     { to: '/audit', icon: ClipboardList, label: 'Audit Log' },
   ];
 
@@ -60,6 +62,7 @@ function App() {
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/upload" element={<Upload />} />
             <Route path="/categories" element={<Categories />} />
+            <Route path="/tags" element={<TagsPage />} />
             <Route path="/audit" element={<Audit />} />
           </Routes>
         </main>
