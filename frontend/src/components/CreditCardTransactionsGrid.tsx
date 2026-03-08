@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getCategories, updateTransaction, deleteTransaction } from '../api';
 import TransactionGrid from './TransactionGrid';
+import ConfirmModal from './ConfirmModal';
 
 export default function CreditCardTransactionsGrid({ cycle, accountId }: { cycle: string, accountId: number | null }) {
   const [data, setData] = useState<any>({ items: [], total: 0, per_page: 20 });
@@ -9,6 +10,7 @@ export default function CreditCardTransactionsGrid({ cycle, accountId }: { cycle
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editCatId, setEditCatId] = useState<number | null>(null);
   const [editTags, setEditTags] = useState<string>('');
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
 
   useEffect(() => { getCategories().then(setCategories); }, []);
   useEffect(() => {
@@ -46,14 +48,17 @@ export default function CreditCardTransactionsGrid({ cycle, accountId }: { cycle
     setEditTags('');
   };
 
-  const handleDelete = async (txnId: number) => {
-    if (!confirm('Delete this transaction?')) return;
-    await deleteTransaction(txnId);
+  const handleDelete = (txnId: number) => setPendingDeleteId(txnId);
+
+  const confirmDelete = async () => {
+    if (pendingDeleteId === null) return;
+    await deleteTransaction(pendingDeleteId);
     setData((prev: any) => ({
       ...prev,
-      items: prev.items.filter((t: any) => t.id !== txnId),
+      items: prev.items.filter((t: any) => t.id !== pendingDeleteId),
       total: prev.total - 1,
     }));
+    setPendingDeleteId(null);
   };
 
   return (
@@ -76,6 +81,16 @@ export default function CreditCardTransactionsGrid({ cycle, accountId }: { cycle
           showActions={true}
         />
       </div>
+
+      <ConfirmModal
+        open={pendingDeleteId !== null}
+        title="Delete Transaction"
+        message="This transaction will be permanently deleted and cannot be recovered."
+        confirmLabel="Delete"
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDeleteId(null)}
+      />
     </div>
   );
 }

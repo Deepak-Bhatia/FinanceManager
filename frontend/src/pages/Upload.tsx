@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getFolders, parseFolder } from '../api';
+import { getFolders, parseFolder, restoreBackup } from '../api';
 import { FolderOpen, Play, CheckCircle, XCircle, Loader2, FileText } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface FolderInfo { name: string; files: string[]; }
 interface FileDetail { file: string; parsed: number; added: number; skipped: number; }
@@ -27,6 +28,8 @@ export default function Upload() {
   const [cleanSuccess, setCleanSuccess] = useState<string | null>(null);
   const [restoreSuccess, setRestoreSuccess] = useState<string | null>(null);
   const [showCleanModal, setShowCleanModal] = useState(false);
+  const [restoreTarget, setRestoreTarget] = useState<string | null>(null);
+  const [selectedRestore, setSelectedRestore] = useState('');
   const [selectedEntities, setSelectedEntities] = useState<Record<string, boolean>>({
     transactions: true,
     emi: false,
@@ -106,27 +109,12 @@ export default function Upload() {
 
             <div className="flex items-center gap-2">
               <select
+                value={selectedRestore}
                 onChange={e => {
                   const val = e.target.value;
                   if (!val) return;
-                  const ok = window.confirm(`Restore backup ${val}? This will overwrite current database. Proceed?`);
-                  if (!ok) return;
-                  setRestoreSuccess(null);
-                  setRestoreLoading(true);
-                  (async () => {
-                    try {
-                      await (await import('../api')).restoreBackup(val);
-                      loadFolders();
-                      setRestoreSuccess(`Restored ${val}`);
-                      setTimeout(() => setRestoreSuccess(null), 8000);
-                    } catch (e) {
-                      setRestoreSuccess('Restore failed');
-                      setTimeout(() => setRestoreSuccess(null), 4000);
-                    } finally {
-                      setRestoreLoading(false);
-                      loadBackups();
-                    }
-                  })();
+                  setRestoreTarget(val);
+                  setSelectedRestore(val);
                 }}
                 className="px-2 py-1 border rounded bg-[var(--bg-primary)] text-sm"
                 disabled={restoreLoading}
@@ -313,6 +301,34 @@ export default function Upload() {
             </div>
           </div>
         )}
+        {/* Restore confirm modal */}
+        <ConfirmModal
+          open={!!restoreTarget}
+          title="Restore Backup"
+          message={`Restore "${restoreTarget}"? This will overwrite the current database and cannot be undone.`}
+          confirmLabel="Restore"
+          danger
+          onConfirm={async () => {
+            const val = restoreTarget!;
+            setRestoreTarget(null);
+            setSelectedRestore('');
+            setRestoreSuccess(null);
+            setRestoreLoading(true);
+            try {
+              await restoreBackup(val);
+              loadFolders();
+              setRestoreSuccess(`Restored ${val}`);
+              setTimeout(() => setRestoreSuccess(null), 8000);
+            } catch {
+              setRestoreSuccess('Restore failed');
+              setTimeout(() => setRestoreSuccess(null), 4000);
+            } finally {
+              setRestoreLoading(false);
+              loadBackups();
+            }
+          }}
+          onCancel={() => { setRestoreTarget(null); setSelectedRestore(''); }}
+        />
     </div>
   );
 }

@@ -24,6 +24,11 @@ export const getByAccount = (params: Record<string, any>) =>
   api.get('/dashboard/by-account', { params }).then(r => r.data);
 
 export const getCategories = () => api.get('/categories').then(r => r.data);
+export const createCategory = (data: { name: string; color?: string; icon?: string }) =>
+  api.post('/categories', data).then(r => r.data);
+export const updateCategory = (id: number, data: { name?: string; color?: string; icon?: string }) =>
+  api.put(`/categories/${id}`, data).then(r => r.data);
+export const deleteCategory = (id: number) => api.delete(`/categories/${id}`).then(r => r.data);
 export const getRules = () => api.get('/categories/rules').then(r => r.data);
 export const createRule = (data: { keyword: string; category_id: number }) =>
   api.post('/categories/rules', data).then(r => r.data);

@@ -4,7 +4,6 @@ Ingestion service — orchestrates parsing files from input folders.
 import os
 from pathlib import Path
 from typing import List, Dict, Any
-import re
 
 from sqlalchemy.orm import Session
 
@@ -18,11 +17,8 @@ from datetime import date
 import calendar
 from app.parsers.pdf_parser import detect_and_parse
 from app.parsers.excel_parser import ExcelParser
-from app.parsers.base import ParseResult
 from app.services.categorizer import categorize_transaction
 from app.models.audit_log import AuditLog
-import pdfplumber
-
 
 excel_parser = ExcelParser()
 
@@ -86,18 +82,6 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
 
         fname = file_path.name
         ext = file_path.suffix.lower()
-
-        # Pre-scan PDF for IGST/GST debug matches so we can attach them to IngestionLog
-        debug_matches = []
-        if ext == ".pdf":
-            try:
-                with pdfplumber.open(file_path) as pdf:
-                    full_text = "\n".join(p.extract_text() or "" for p in pdf.pages)
-                igst_pat_local = re.compile(r"(IGST|GST).*?@.*?(?:\d+\.?\d*%?)\s*[,;:\-\s]*([\d,]+\.\d{2})", re.IGNORECASE)
-                for m in igst_pat_local.finditer(full_text):
-                    debug_matches.append(f"RAW_IGST_MATCH: {m.group(0).strip()} amt={m.group(2).strip()}")
-            except Exception:
-                debug_matches = []
 
         try:
             if ext == ".pdf":
@@ -229,13 +213,7 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
                     db.add(TransactionMetadata(transaction_hash=txn_hash, category_id=None))
                     emi_txn_added += 1
 
-            # Build the base ingestion log message
-            base_msg = f"Parsed {len(parsed)} transactions, added {added}, skipped {skipped} duplicates, {emi_added} EMI details, {emi_txn_added} EMI transactions"
-            if debug_matches:
-                debug_summary = "\nDEBUG_IGST_MATCHES:\n" + "\n".join(debug_matches)
-                message = base_msg + debug_summary
-            else:
-                message = base_msg
+            message = f"Parsed {len(parsed)} transactions, added {added}, skipped {skipped} duplicates, {emi_added} EMI details, {emi_txn_added} EMI transactions"
 
             db.add(IngestionLog(
                 folder_name=folder_name,

@@ -16,40 +16,91 @@ function formatDate(iso: string) {
     + ' ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 }
 
+function lastMonthRange() {
+  const now = new Date();
+  const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const last = new Date(now.getFullYear(), now.getMonth(), 0);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { from: fmt(first), to: fmt(last) };
+}
+
+const defaultRange = lastMonthRange();
+
 export default function Audit() {
   const [data, setData] = useState<any>({ items: [], total: 0, per_page: 50 });
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState('');
+  const [fromDate, setFromDate] = useState(defaultRange.from);
+  const [toDate, setToDate] = useState(defaultRange.to);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    getAuditLogs({ event_type: filter || undefined, page, per_page: 50 })
+    getAuditLogs({
+      event_type: filter || undefined,
+      from_date: fromDate || undefined,
+      to_date: toDate || undefined,
+      page,
+      per_page: 50,
+    })
       .then(setData)
       .finally(() => setLoading(false));
-  }, [page, filter]);
+  }, [page, filter, fromDate, toDate]);
+
+  const resetPage = () => setPage(1);
 
   const totalPages = Math.ceil(data.total / data.per_page);
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold">Audit Log</h2>
-        <div className="flex gap-2 items-center">
-          <Filter size={16} className="text-[var(--text-secondary)]" />
-          <select
-            value={filter}
-            onChange={e => { setFilter(e.target.value); setPage(1); }}
-            className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm"
-          >
-            <option value="">All Events</option>
-            <option value="parse">Parse</option>
-            <option value="category_change">Category Changes</option>
-            <option value="type_change">Type Changes</option>
-            <option value="field_change">Field Changes</option>
-          </select>
-        </div>
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        <h2 className="text-2xl font-bold mr-auto">Audit Log</h2>
+
+        <Filter size={16} className="text-[var(--text-secondary)]" />
+
+        {/* Date range */}
+        <label className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
+          From
+          <input
+            type="date"
+            value={fromDate}
+            onChange={e => { setFromDate(e.target.value); resetPage(); }}
+            className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-sm text-[var(--text-primary)]"
+          />
+        </label>
+
+        <label className="flex items-center gap-1.5 text-sm text-[var(--text-secondary)]">
+          To
+          <input
+            type="date"
+            value={toDate}
+            onChange={e => { setToDate(e.target.value); resetPage(); }}
+            className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-2 py-1.5 text-sm text-[var(--text-primary)]"
+          />
+        </label>
+
+        <button
+          onClick={() => { setFromDate(''); setToDate(''); resetPage(); }}
+          className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] px-2 py-1.5 border border-[var(--border)] rounded-lg"
+          title="Clear date filter"
+        >
+          All dates
+        </button>
+
+        {/* Event type */}
+        <select
+          value={filter}
+          onChange={e => { setFilter(e.target.value); resetPage(); }}
+          className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm"
+        >
+          <option value="">All Events</option>
+          <option value="parse">Parse</option>
+          <option value="category_change">Category Changes</option>
+          <option value="type_change">Type Changes</option>
+          <option value="field_change">Field Changes</option>
+          <option value="delete">Deletions</option>
+        </select>
       </div>
 
       <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl overflow-hidden">
@@ -173,7 +224,7 @@ export default function Audit() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border)]">
             <span className="text-xs text-[var(--text-secondary)]">
-              Showing {(page - 1) * data.per_page + 1}-{Math.min(page * data.per_page, data.total)} of {data.total}
+              Showing {(page - 1) * data.per_page + 1}–{Math.min(page * data.per_page, data.total)} of {data.total}
             </span>
             <div className="flex gap-1">
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}

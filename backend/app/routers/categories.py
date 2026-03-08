@@ -19,6 +19,12 @@ class CategoryCreate(BaseModel):
     icon: Optional[str] = None
 
 
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+
+
 class RuleCreate(BaseModel):
     keyword: str
     category_id: int
@@ -38,6 +44,36 @@ def create_category(body: CategoryCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(cat)
     return {"id": cat.id, "name": cat.name, "color": cat.color, "icon": cat.icon}
+
+
+@router.put("/{cat_id}")
+def update_category(cat_id: int, body: CategoryUpdate, db: Session = Depends(get_db)):
+    cat = db.query(Category).get(cat_id)
+    if not cat:
+        raise HTTPException(404, "Category not found")
+    if body.name is not None:
+        cat.name = body.name
+    if body.color is not None:
+        cat.color = body.color
+    if body.icon is not None:
+        cat.icon = body.icon
+    db.commit()
+    db.refresh(cat)
+    return {"id": cat.id, "name": cat.name, "color": cat.color, "icon": cat.icon}
+
+
+@router.delete("/{cat_id}")
+def delete_category(cat_id: int, db: Session = Depends(get_db)):
+    from app.models.transaction_metadata import TransactionMetadata
+    cat = db.query(Category).get(cat_id)
+    if not cat:
+        raise HTTPException(404, "Category not found")
+    count = db.query(TransactionMetadata).filter(TransactionMetadata.category_id == cat_id).count()
+    if count > 0:
+        raise HTTPException(409, f"Cannot delete: {count} transaction(s) use this category. Re-categorize them first.")
+    db.delete(cat)
+    db.commit()
+    return {"deleted": True}
 
 
 @router.get("/rules")

@@ -44,7 +44,9 @@ def list_transactions(
     category_id: Optional[int] = Query(None),
     account_id: Optional[int] = Query(None),
     account_type: Optional[str] = Query(None),
+    txn_type: Optional[str] = Query(None, alias="type"),
     search: Optional[str] = Query(None),
+    tag: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -61,8 +63,15 @@ def list_transactions(
         q = q.filter(Transaction.account_id == account_id)
     if account_type:
         q = q.join(Account, Transaction.account_id == Account.id).filter(Account.type == account_type)
+    if txn_type:
+        q = q.filter(Transaction.type == txn_type)
     if search:
         q = q.filter(Transaction.description.ilike(f"%{search}%"))
+    if tag:
+        meta_q = db.query(TransactionMetadata.transaction_hash).filter(
+            TransactionMetadata.tags.ilike(f"%{tag}%")
+        ).subquery()
+        q = q.filter(Transaction.transaction_hash.in_(meta_q))
 
     total = q.count()
     total_income = q.filter(Transaction.type == "credit").with_entities(func.sum(Transaction.amount)).scalar() or 0
