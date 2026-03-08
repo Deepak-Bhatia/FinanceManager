@@ -1,0 +1,26 @@
+# Python
+backend/venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.env
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+
+# Data (SQLite DB + personal financial PDFs)
+data/
+input/
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.sw?
+.DS_Store
+
+# Logs
+*.log

@@ -1,0 +1,138 @@
+"""
+Transaction CRUD router.
+"""
+from typing import Optional
+from fastapi import APIRouter, Depends, Query, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models.transaction import Transaction
+
+router = APIRouter(prefix="/api/transactions", tags=["transactions"])
+
+
+class TransactionUpdate(BaseModel):
+    description: Optional[str] = None
+    amount: Optional[float] = None
+    type: Optional[str] = None
+    category_id: Optional[int] = None
+    notes: Optional[str] = None
+    tags: Optional[str] = None
+    is_recurring: Optional[bool] = None
+
+
+class TransactionCreate(BaseModel):
+    date: str
+    description: str
+    amount: float
+    type: str = "debit"
+    category_id: Optional[int] = None
+    account_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+@router.get("")
+def list_transactions(
+    month: Optional[int] = Query(None),
+    year: Optional[int] = Query(None),
+    category_id: Optional[int] = Query(None),
+    account_id: Optional[int] = Query(None),
+    search: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """List transactions with optional filters and pagination."""
+    q = db.query(Transaction)
+    if month:
+        q = q.filter(Transaction.month == month)
+    if year:
+        q = q.filter(Transaction.year == year)
+    if category_id:
+        q = q.filter(Transaction.category_id == category_id)
+    if account_id:
+        q = q.filter(Transaction.account_id == account_id)
+    if search:
+        q = q.filter(Transaction.description.ilike(f"%{search}%"))
+
+    total = q.count()
+    items = q.order_by(Transaction.date.desc()).offset((page - 1) * per_page).limit(per_page).all()
+
+    return {
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "items": [_serialize(t) for t in items],
+    }
+
+
+@router.get("/{txn_id}")
+def get_transaction(txn_id: int, db: Session = Depends(get_db)):
+    txn = db.query(Transaction).get(txn_id)
+    if not txn:
+        raise HTTPException(404, "Transaction not found")
+    return _serialize(txn)
+
+
+@router.post("")
+def create_transaction(body: TransactionCreate, db: Session = Depends(get_db)):
+    from datetime import date as dt_date
+    txn = Transaction(
+        date=dt_date.fromisoformat(body.date),
+        description=body.description,
+        amount=body.amount,
+        type=body.type,
+        category_id=body.category_id,
+        account_id=body.account_id,
+        notes=body.notes,
+        source="manual",
+        source_file="",
+        month=dt_date.fromisoformat(body.date).month,
+        year=dt_date.fromisoformat(body.date).year,
+    )
+    db.add(txn)
+    db.commit()
+    db.refresh(txn)
+    return _serialize(txn)
+
+
+@router.patch("/{txn_id}")
+def update_transaction(txn_id: int, body: TransactionUpdate, db: Session = Depends(get_db)):
+    txn = db.query(Transaction).get(txn_id)
+    if not txn:
+        raise HTTPException(404, "Transaction not found")
+    for field, val in body.dict(exclude_unset=True).items():
+        setattr(txn, field, val)
+    db.commit()
+    db.refresh(txn)
+    return _serialize(txn)
+
+
+@router.delete("/{txn_id}")
+def delete_transaction(txn_id: int, db: Session = Depends(get_db)):
+    txn = db.query(Transaction).get(txn_id)
+    if not txn:
+        raise HTTPException(404, "Transaction not found")
+    db.delete(txn)
+    db.commit()
+    return {"deleted": True}
+
+
+def _serialize(t: Transaction) -> dict:
+    return {
+        "id": t.id,
+        "date": t.date.isoformat() if t.date else None,
+        "description": t.description,
+        "amount": t.amount,
+        "type": t.type,
+        "category_id": t.category_id,
+        "account_id": t.account_id,
+        "source": t.source,
+        "source_file": t.source_file,
+        "month": t.month,
+        "year": t.year,
+        "is_recurring": t.is_recurring,
+        "tags": t.tags,
+        "notes": t.notes,
+        "created_at": t.created_at.isoformat() if t.created_at else None,
+    }
