@@ -3,11 +3,13 @@ Credit card analytics service — billing cycle based aggregations.
 """
 import re
 from typing import List, Dict, Any, Optional
+from sqlalchemy import or_, func
 
 from sqlalchemy.orm import Session
 
 from app.models.transaction import Transaction
 from app.models.category import Category
+from app.models.transaction_metadata import TransactionMetadata
 from app.models.account import Account
 
 # Keywords that indicate EMI / loan-based transactions
@@ -52,6 +54,11 @@ def get_analytics(
     )
     if account_id:
         base = base.filter(Transaction.account_id == account_id)
+
+    # Exclude transactions tagged as 'ignore' (case-insensitive)
+    base = base.outerjoin(TransactionMetadata, Transaction.transaction_hash == TransactionMetadata.transaction_hash).filter(
+        or_(TransactionMetadata.tags == None, ~func.lower(TransactionMetadata.tags).like('%ignore%'))
+    )
 
     all_txns = base.all()
     debits = [t for t in all_txns if t.type == "debit"]

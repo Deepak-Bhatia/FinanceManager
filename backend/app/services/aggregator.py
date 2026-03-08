@@ -2,7 +2,7 @@
 Aggregator service — computes dashboard data from transactions.
 """
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract
+from sqlalchemy import func, extract, or_
 
 from app.models.transaction import Transaction
 from app.models.transaction_metadata import TransactionMetadata
@@ -13,6 +13,10 @@ from app.models.account import Account
 def get_summary(db: Session, month: int = None, year: int = None):
     """Total income, expense, savings for a given month/year."""
     q = db.query(Transaction)
+    # Exclude transactions that have been explicitly tagged as 'ignore'
+    q = q.outerjoin(TransactionMetadata, Transaction.transaction_hash == TransactionMetadata.transaction_hash).filter(
+        or_(TransactionMetadata.tags == None, ~func.lower(TransactionMetadata.tags).like('%ignore%'))
+    )
     if month:
         q = q.filter(Transaction.month == month)
     if year:
@@ -41,7 +45,10 @@ def get_by_category(db: Session, month: int = None, year: int = None):
         func.count(Transaction.id).label("count"),
     ).join(TransactionMetadata, Transaction.transaction_hash == TransactionMetadata.transaction_hash).outerjoin(Category, TransactionMetadata.category_id == Category.id)
 
-    q = q.filter(Transaction.type == "debit")
+    # Exclude ignored transactions
+    q = q.filter(Transaction.type == "debit").filter(
+        or_(TransactionMetadata.tags == None, ~func.lower(TransactionMetadata.tags).like('%ignore%'))
+    )
     if month:
         q = q.filter(Transaction.month == month)
     if year:
@@ -64,6 +71,10 @@ def get_monthly_trend(db: Session, year: int = None):
     )
     if year:
         q = q.filter(Transaction.year == year)
+    # Exclude ignored transactions
+    q = q.outerjoin(TransactionMetadata, Transaction.transaction_hash == TransactionMetadata.transaction_hash).filter(
+        or_(TransactionMetadata.tags == None, ~func.lower(TransactionMetadata.tags).like('%ignore%'))
+    )
 
     rows = q.group_by(Transaction.year, Transaction.month, Transaction.type).all()
 
@@ -93,6 +104,10 @@ def get_top_merchants(db: Session, month: int = None, year: int = None, limit: i
         q = q.filter(Transaction.month == month)
     if year:
         q = q.filter(Transaction.year == year)
+    # Exclude ignored transactions
+    q = q.outerjoin(TransactionMetadata, Transaction.transaction_hash == TransactionMetadata.transaction_hash).filter(
+        or_(TransactionMetadata.tags == None, ~func.lower(TransactionMetadata.tags).like('%ignore%'))
+    )
 
     rows = q.group_by(Transaction.description).order_by(func.sum(Transaction.amount).desc()).limit(limit).all()
     return [{"description": r.description, "total": round(r.total, 2), "count": r.count} for r in rows]
@@ -117,6 +132,10 @@ def get_account_summary(db: Session, month: int = None, year: int = None):
         q = q.filter(Transaction.month == month)
     if year:
         q = q.filter(Transaction.year == year)
+    # Exclude ignored transactions
+    q = q.outerjoin(TransactionMetadata, Transaction.transaction_hash == TransactionMetadata.transaction_hash).filter(
+        or_(TransactionMetadata.tags == None, ~func.lower(TransactionMetadata.tags).like('%ignore%'))
+    )
 
     rows = q.group_by(Account.name, Account.bank, Transaction.type).all()
 

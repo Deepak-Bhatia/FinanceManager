@@ -216,9 +216,14 @@ export default function TransactionGrid({
             <tr><td colSpan={showActions ? 7 : 6} className="px-4 py-8 text-center text-[var(--text-secondary)]">No transactions found</td></tr>
           ) : (
             filtered.map((t: any) => {
+              const isIgnored = ((t.tags || '') as string).toLowerCase().split(',').map(s => s.trim()).includes('ignore');
               const cat = catMap[t.category_id];
               return (
-                <tr key={t.id} className="border-b border-[var(--border)] hover:bg-[var(--bg-primary)] transition-colors">
+                <tr
+                  key={t.id}
+                  className={`border-b border-[var(--border)] transition-colors ${isIgnored ? 'opacity-50 bg-[var(--bg-primary)]' : 'hover:bg-[var(--bg-primary)]'}`}
+                  title={isIgnored ? 'Ignored transaction — excluded from calculations' : undefined}
+                >
                   <td className="px-4 py-3 whitespace-nowrap">{t.date}</td>
                   <td className="px-4 py-3 max-w-xs truncate" title={t.description}>
                     <span className="inline-flex items-center gap-2">
