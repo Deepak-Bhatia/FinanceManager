@@ -12,6 +12,9 @@ from app.services.credit_card_service import (
     get_available_billing_cycles,
     get_analytics,
 )
+from app.models.transaction import Transaction
+from app.models.category import Category
+from app.models.account import Account
 
 router = APIRouter(prefix="/api/creditcards", tags=["creditcards"])
 
@@ -33,3 +36,53 @@ def analytics(
     db: Session = Depends(get_db),
 ):
     return get_analytics(db, cycle, account_id)
+
+
+# New endpoint: /api/creditcards/transactions
+@router.get("/transactions")
+def credit_card_transactions(
+    cycle: str = Query(...),
+    account_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Return credit card transactions for a billing cycle (and optionally account)."""
+    q = db.query(Transaction).filter(
+        Transaction.source == "credit_card_pdf",
+        Transaction.cycle == cycle,
+    )
+    if account_id:
+        q = q.filter(Transaction.account_id == account_id)
+    txns = q.order_by(Transaction.date.desc(), Transaction.id.desc()).all()
+
+    # Fetch category and account lookups
+    cat_ids = list({t.category_id for t in txns if t.category_id})
+    acct_ids = list({t.account_id for t in txns if t.account_id})
+    cat_lookup = {}
+    acct_lookup = {}
+    if cat_ids:
+        cats = db.query(Category).filter(Category.id.in_(cat_ids)).all()
+        cat_lookup = {c.id: c.name for c in cats}
+    if acct_ids:
+        accts = db.query(Account).filter(Account.id.in_(acct_ids)).all()
+        acct_lookup = {a.id: a.name for a in accts}
+
+    items = [
+        {
+            "id": t.id,
+            "date": t.date.isoformat(),
+            "description": t.description,
+            "amount": round(t.amount, 2),
+            "type": t.type,
+            "category": cat_lookup.get(t.category_id, "Uncategorized"),
+            "account": acct_lookup.get(t.account_id, "Unknown"),
+            "category_id": t.category_id,
+            "account_id": t.account_id,
+            "notes": t.notes,
+        }
+        for t in txns
+    ]
+    return {
+        "items": items,
+        "total": len(items),
+        "per_page": 1000,
+    }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getCreditCardAccounts, getCreditCardCycles, getCreditCardAnalytics } from '../api';
+import CreditCardTransactionsGrid from '../components/CreditCardTransactionsGrid';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -205,8 +206,8 @@ export default function CreditCards() {
             </div>
           </div>
 
-          {/* Spends Table */}
-          <SpendTable spends={data.all_spends} accounts={accounts} />
+          {/* Credit Card Transactions Grid */}
+          <CreditCardTransactionsGrid cycle={selectedCycle} accountId={accountId} />
         </>
       )}
     </div>

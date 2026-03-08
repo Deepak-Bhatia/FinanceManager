@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getSummary, getByCategory, getMonthlyTrend, getTopMerchants, getByAccount } from '../api';
+import DashboardTransactionsGrid from '../components/DashboardTransactionsGrid';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -84,7 +85,7 @@ export default function Dashboard() {
                 data={byCategory}
                 dataKey="total"
                 nameKey="category"
-                cx="50%"
+                cx="40%"
                 cy="50%"
                 outerRadius={100}
                 label={({ category, total }) => `${category}: ${fmt(total)}`}
@@ -94,6 +95,31 @@ export default function Dashboard() {
                 ))}
               </Pie>
               <Tooltip formatter={(v: number) => fmt(v)} />
+              <Legend
+                layout="vertical"
+                align="right"
+                verticalAlign="middle"
+                iconType="circle"
+                formatter={(value, entry) => {
+                  // Sort categories by total descending
+                  const sorted = [...byCategory].sort((a, b) => b.total - a.total);
+                  // Find the index of this category in sorted order
+                  const cat = sorted.find(c => c.category === value);
+                  if (!cat) return value;
+                  const total = sorted.reduce((sum, c) => sum + c.total, 0) || 1;
+                  const percent = ((cat.total / total) * 100).toFixed(1);
+                  return `${cat.category}: ${fmt(cat.total)} (${percent}%)`;
+                }}
+                // Use a custom payload to order legend items by spend
+                payload={byCategory
+                  .slice()
+                  .sort((a, b) => b.total - a.total)
+                  .map(cat => ({
+                    value: cat.category,
+                    type: "circle",
+                    color: cat.color,
+                  }))}
+              />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -150,6 +176,9 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* Transaction Grid at the bottom */}
+      <DashboardTransactionsGrid month={month} year={year} />
     </div>
   );
 }
