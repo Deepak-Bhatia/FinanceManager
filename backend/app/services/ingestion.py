@@ -12,6 +12,8 @@ from app.models.transaction import Transaction
 from app.models.account import Account
 from app.models.ingestion_log import IngestionLog
 from app.models.emi_detail import EmiDetail
+from datetime import date
+import calendar
 from app.parsers.pdf_parser import detect_and_parse
 from app.parsers.excel_parser import ExcelParser
 from app.parsers.base import ParseResult
@@ -124,43 +126,98 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
 
             # Save EMI details
             emi_added = 0
+            emi_txn_added = 0
             for ed in emi_details_parsed:
                 account_id = _get_or_create_account(db, ed.account_name, ed.bank)
-                # Skip duplicate EMI details (same product + account + booking month)
+                # Check for existing EMI detail (same product + account + booking month)
                 existing = db.query(EmiDetail).filter(
                     EmiDetail.account_id == account_id,
                     EmiDetail.product_name == ed.product_name,
                     EmiDetail.booking_month == ed.booking_month,
                 ).first()
-                if existing:
+                if not existing:
+                    emi = EmiDetail(
+                        account_id=account_id,
+                        product_name=ed.product_name,
+                        duration_months=ed.duration_months,
+                        booking_month=ed.booking_month,
+                        loan_expiry=ed.loan_expiry,
+                        total_outstanding=ed.total_outstanding,
+                        monthly_emi=ed.monthly_emi,
+                        principal_component=ed.principal_component,
+                        interest_component=ed.interest_component,
+                        loan_amount=ed.loan_amount,
+                        pending_installments=ed.pending_installments,
+                        source_file=fname,
+                    )
+                    db.add(emi)
+                    emi_added += 1
+                else:
+                    emi = existing
+
+                # Also create a transaction record for the EMI installment for the booking month.
+                # Parse booking_month like "Feb.'26" or fallback to folder_name if parsing fails.
+                try:
+                    bm = (getattr(ed, 'booking_month', None) or getattr(emi, 'booking_month', '')).strip()
+                    # Expect formats like "Feb.'26" or "Feb 26"
+                    # Extract month abbreviation and year digits
+                    parts = bm.replace("\u2019", "'").replace("\u2018", "'").split()
+                    if len(parts) == 1 and "'" in parts[0]:
+                        # e.g. "Feb.'26"
+                        m_abbr = parts[0].split("'")[0].strip().strip('.')
+                        y_tail = parts[0].split("'")[-1].strip()
+                    elif len(parts) >= 2:
+                        m_abbr = parts[0].strip().strip('.')
+                        y_tail = parts[1].strip().strip('.')
+                    else:
+                        raise ValueError('unknown booking_month')
+                    m_abbr = m_abbr[:3]
+                    month_num = list(calendar.month_abbr).index(m_abbr.capitalize())
+                    year_num = int(y_tail)
+                    if year_num < 100:
+                        year_num += 2000
+                    txn_date = date(year_num, month_num, 1)
+                except Exception:
+                    # fallback: use folder_name (expected 'YYYY-MM') as first day
+                    try:
+                        y, m = folder_name.split('-')
+                        txn_date = date(int(y), int(m), 1)
+                    except Exception:
+                        txn_date = date.today()
+
+                emi_desc = f"{getattr(ed, 'product_name', getattr(emi, 'product_name', 'EMI'))} EMI"
+                monthly_amount = getattr(ed, 'monthly_emi', None) or getattr(emi, 'monthly_emi', None)
+                # Avoid duplicate transaction rows
+                if monthly_amount is None:
                     continue
-                emi = EmiDetail(
-                    account_id=account_id,
-                    product_name=ed.product_name,
-                    duration_months=ed.duration_months,
-                    booking_month=ed.booking_month,
-                    loan_expiry=ed.loan_expiry,
-                    total_outstanding=ed.total_outstanding,
-                    monthly_emi=ed.monthly_emi,
-                    principal_component=ed.principal_component,
-                    interest_component=ed.interest_component,
-                    loan_amount=ed.loan_amount,
-                    pending_installments=ed.pending_installments,
-                    source_file=fname,
-                )
-                db.add(emi)
-                emi_added += 1
+                if not _is_duplicate(db, txn_date, emi_desc, monthly_amount, account_id):
+                    txn = Transaction(
+                        date=txn_date,
+                        description=emi_desc,
+                        amount=monthly_amount,
+                        type='debit',
+                        category_id=None,
+                        account_id=account_id,
+                        source=getattr(ed, 'source', 'credit_card_pdf'),
+                        source_file=fname,
+                        cycle=folder_name,
+                        month=txn_date.month,
+                        year=txn_date.year,
+                        is_recurring=True,
+                    )
+                    db.add(txn)
+                    emi_txn_added += 1
 
             db.add(IngestionLog(
                 folder_name=folder_name,
                 file_name=fname,
                 status="success",
-                message=f"Parsed {len(parsed)} transactions, added {added}, skipped {skipped} duplicates, {emi_added} EMI details",
-                transactions_added=added,
+                message=f"Parsed {len(parsed)} transactions, added {added}, skipped {skipped} duplicates, {emi_added} EMI details, {emi_txn_added} EMI transactions",
+                transactions_added=added + emi_txn_added,
             ))
 
             results["files_processed"] += 1
-            results["transactions_added"] += added
+            results["transactions_added"] += added + emi_txn_added
             results["transactions_skipped"] += skipped
             results["details"].append({
                 "file": fname,
@@ -168,6 +225,7 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
                 "added": added,
                 "skipped": skipped,
                 "emi_details": emi_added,
+                "emi_txn_added": emi_txn_added,
             })
 
         except Exception as e:
