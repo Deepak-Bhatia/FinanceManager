@@ -63,7 +63,7 @@ def get_analytics(
     # --- By Category ---
     cat_map: Dict[int, Dict] = {}
     for t in debits:
-        cid = t.category_id or 0
+        cid = (t.metadata_record.category_id if t.metadata_record and t.metadata_record.category_id else None) or 0
         if cid not in cat_map:
             cat_map[cid] = {"total": 0, "count": 0}
         cat_map[cid]["total"] += t.amount
@@ -142,7 +142,7 @@ def get_analytics(
     if acct_ids_all:
         accts = db.query(Account).filter(Account.id.in_(acct_ids_all)).all()
         acct_lookup_all = {a.id: a.name for a in accts}
-    cat_ids_all = list({t.category_id for t in all_sorted if t.category_id})
+    cat_ids_all = list({(t.metadata_record.category_id if t.metadata_record else None) for t in all_sorted if (t.metadata_record and t.metadata_record.category_id)})
     cat_lookup_all = {}
     if cat_ids_all:
         cats = db.query(Category).filter(Category.id.in_(cat_ids_all)).all()
@@ -150,6 +150,7 @@ def get_analytics(
 
     all_spends_data = []
     for t in all_sorted:
+        cid = (t.metadata_record.category_id if t.metadata_record else None)
         all_spends_data.append({
             "id": t.id,
             "date": t.date.isoformat(),
@@ -157,8 +158,11 @@ def get_analytics(
             "amount": round(t.amount, 2),
             "card": acct_lookup_all.get(t.account_id, "Unknown"),
             "card_id": t.account_id,
-            "category": cat_lookup_all.get(t.category_id, "Uncategorized"),
+            "category": cat_lookup_all.get(cid, "Uncategorized"),
             "is_emi": _is_emi(t.description),
+            "tags": (t.metadata_record.tags if t.metadata_record else None),
+            "source": t.source,
+            "source_file": t.source_file,
         })
 
     # Derive cycle label from the cycle string and actual transaction dates

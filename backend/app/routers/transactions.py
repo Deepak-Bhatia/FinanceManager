@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.database import get_db
 from app.models.transaction import Transaction
+from app.models.transaction_metadata import TransactionMetadata
+from app.models.transaction import compute_transaction_hash
 from app.models.account import Account
 from app.models.audit_log import AuditLog
 from app.models.category import Category
@@ -54,7 +56,7 @@ def list_transactions(
     if year:
         q = q.filter(Transaction.year == year)
     if category_id:
-        q = q.filter(Transaction.category_id == category_id)
+        q = q.join(TransactionMetadata, Transaction.transaction_hash == TransactionMetadata.transaction_hash).filter(TransactionMetadata.category_id == category_id)
     if account_id:
         q = q.filter(Transaction.account_id == account_id)
     if account_type:
@@ -89,22 +91,37 @@ def get_transaction(txn_id: int, db: Session = Depends(get_db)):
 @router.post("")
 def create_transaction(body: TransactionCreate, db: Session = Depends(get_db)):
     from datetime import date as dt_date
+    txn_date = dt_date.fromisoformat(body.date)
     txn = Transaction(
-        date=dt_date.fromisoformat(body.date),
+        transaction_hash=compute_transaction_hash(txn_date, body.description, body.amount),
+        date=txn_date,
         description=body.description,
         amount=body.amount,
         type=body.type,
-        category_id=body.category_id,
         account_id=body.account_id,
         notes=body.notes,
         source="manual",
         source_file="",
-        month=dt_date.fromisoformat(body.date).month,
-        year=dt_date.fromisoformat(body.date).year,
+        month=txn_date.month,
+        year=txn_date.year,
     )
     db.add(txn)
     db.commit()
     db.refresh(txn)
+
+    # create or update metadata if provided
+    if body.category_id is not None or getattr(body, "tags", None) is not None:
+        meta = db.query(TransactionMetadata).filter(TransactionMetadata.transaction_hash == txn.transaction_hash).first()
+        if not meta:
+            meta = TransactionMetadata(transaction_hash=txn.transaction_hash)
+            db.add(meta)
+            db.flush()
+        if body.category_id is not None:
+            meta.category_id = body.category_id
+        if getattr(body, "tags", None) is not None:
+            meta.tags = body.tags
+        db.commit()
+
     return _serialize(txn)
 
 
@@ -116,31 +133,49 @@ def update_transaction(txn_id: int, body: TransactionUpdate, db: Session = Depen
 
     changes = body.dict(exclude_unset=True)
     for field, val in changes.items():
-        old_val = getattr(txn, field)
-        if old_val != val:
-            if field == "category_id":
-                old_cat = db.query(Category).get(old_val) if old_val else None
-                new_cat = db.query(Category).get(val) if val else None
-                old_name = old_cat.name if old_cat else "Uncategorized"
-                new_name = new_cat.name if new_cat else "Uncategorized"
-                db.add(AuditLog(
-                    event_type="category_change",
-                    summary=f"Category changed from '{old_name}' to '{new_name}' on txn #{txn_id}: {txn.description}",
-                    details=f'{{"transaction_id": {txn_id}, "field": "category_id", "old": "{old_name}", "new": "{new_name}"}}',
-                ))
-            elif field == "type":
-                db.add(AuditLog(
-                    event_type="type_change",
-                    summary=f"Type changed from '{old_val}' to '{val}' on txn #{txn_id}: {txn.description}",
-                    details=f'{{"transaction_id": {txn_id}, "field": "type", "old": "{old_val}", "new": "{val}"}}',
-                ))
-            else:
-                db.add(AuditLog(
-                    event_type="field_change",
-                    summary=f"{field} changed on txn #{txn_id}: {txn.description}",
-                    details=f'{{"transaction_id": {txn_id}, "field": "{field}", "old": "{old_val}", "new": "{val}"}}',
-                ))
-        setattr(txn, field, val)
+        # special handling for metadata fields
+        if field in ("category_id", "tags"):
+            # get or create metadata row
+            meta = db.query(TransactionMetadata).filter(TransactionMetadata.transaction_hash == txn.transaction_hash).first()
+            old_val = getattr(meta, field) if meta else None
+            if old_val != val:
+                if field == "category_id":
+                    old_cat = db.query(Category).get(old_val) if old_val else None
+                    new_cat = db.query(Category).get(val) if val else None
+                    old_name = old_cat.name if old_cat else "Uncategorized"
+                    new_name = new_cat.name if new_cat else "Uncategorized"
+                    db.add(AuditLog(
+                        event_type="category_change",
+                        summary=f"Category changed from '{old_name}' to '{new_name}' on txn #{txn_id}: {txn.description}",
+                        details=f'{{"transaction_id": {txn_id}, "field": "category_id", "old": "{old_name}", "new": "{new_name}"}}',
+                    ))
+                else:
+                    db.add(AuditLog(
+                        event_type="field_change",
+                        summary=f"{field} changed on txn #{txn_id}: {txn.description}",
+                        details=f'{{"transaction_id": {txn_id}, "field": "{field}", "old": "{old_val}", "new": "{val}"}}',
+                    ))
+                if not meta:
+                    meta = TransactionMetadata(transaction_hash=txn.transaction_hash)
+                    db.add(meta)
+                    db.flush()
+                setattr(meta, field, val)
+        else:
+            old_val = getattr(txn, field)
+            if old_val != val:
+                if field == "type":
+                    db.add(AuditLog(
+                        event_type="type_change",
+                        summary=f"Type changed from '{old_val}' to '{val}' on txn #{txn_id}: {txn.description}",
+                        details=f'{{"transaction_id": {txn_id}, "field": "type", "old": "{old_val}", "new": "{val}"}}',
+                    ))
+                else:
+                    db.add(AuditLog(
+                        event_type="field_change",
+                        summary=f"{field} changed on txn #{txn_id}: {txn.description}",
+                        details=f'{{"transaction_id": {txn_id}, "field": "{field}", "old": "{old_val}", "new": "{val}"}}',
+                    ))
+            setattr(txn, field, val)
     db.commit()
     db.refresh(txn)
     return _serialize(txn)
@@ -159,18 +194,19 @@ def delete_transaction(txn_id: int, db: Session = Depends(get_db)):
 def _serialize(t: Transaction) -> dict:
     return {
         "id": t.id,
+        "transaction_hash": t.transaction_hash,
         "date": t.date.isoformat() if t.date else None,
         "description": t.description,
         "amount": t.amount,
         "type": t.type,
-        "category_id": t.category_id,
+        "category_id": (t.metadata_record.category_id if t.metadata_record else None),
         "account_id": t.account_id,
         "source": t.source,
         "source_file": t.source_file,
         "month": t.month,
         "year": t.year,
         "is_recurring": t.is_recurring,
-        "tags": t.tags,
+        "tags": (t.metadata_record.tags if t.metadata_record else None),
         "notes": t.notes,
         "created_at": t.created_at.isoformat() if t.created_at else None,
     }

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
 
 from app.models.transaction import Transaction
+from app.models.transaction_metadata import TransactionMetadata
 from app.models.category import Category
 from app.models.account import Account
 
@@ -38,7 +39,7 @@ def get_by_category(db: Session, month: int = None, year: int = None):
         Category.color,
         func.sum(Transaction.amount).label("total"),
         func.count(Transaction.id).label("count"),
-    ).outerjoin(Category, Transaction.category_id == Category.id)
+    ).join(TransactionMetadata, Transaction.transaction_hash == TransactionMetadata.transaction_hash).outerjoin(Category, TransactionMetadata.category_id == Category.id)
 
     q = q.filter(Transaction.type == "debit")
     if month:

@@ -9,7 +9,8 @@ import re
 from sqlalchemy.orm import Session
 
 from app.config import INPUT_DIR
-from app.models.transaction import Transaction
+from app.models.transaction import Transaction, compute_transaction_hash
+from app.models.transaction_metadata import TransactionMetadata
 from app.models.account import Account
 from app.models.ingestion_log import IngestionLog
 from app.models.emi_detail import EmiDetail
@@ -122,12 +123,13 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
 
                 category_id = categorize_transaction(db, p.description)
 
+                txn_hash = compute_transaction_hash(p.date, p.description, p.amount)
                 txn = Transaction(
+                    transaction_hash=txn_hash,
                     date=p.date,
                     description=p.description,
                     amount=p.amount,
                     type=p.type,
-                    category_id=category_id,
                     account_id=account_id,
                     source=p.source,
                     source_file=fname,
@@ -136,6 +138,9 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
                     year=p.date.year,
                 )
                 db.add(txn)
+                # persist metadata (category/tags)
+                meta = TransactionMetadata(transaction_hash=txn_hash, category_id=category_id)
+                db.add(meta)
                 added += 1
 
             # Save EMI details
@@ -205,12 +210,13 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
                 if monthly_amount is None:
                     continue
                 if not _is_duplicate(db, txn_date, emi_desc, monthly_amount, account_id):
+                    txn_hash = compute_transaction_hash(txn_date, emi_desc, monthly_amount)
                     txn = Transaction(
+                        transaction_hash=txn_hash,
                         date=txn_date,
                         description=emi_desc,
                         amount=monthly_amount,
                         type='debit',
-                        category_id=None,
                         account_id=account_id,
                         source=getattr(ed, 'source', 'credit_card_pdf'),
                         source_file=fname,
@@ -220,6 +226,7 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
                         is_recurring=True,
                     )
                     db.add(txn)
+                    db.add(TransactionMetadata(transaction_hash=txn_hash, category_id=None))
                     emi_txn_added += 1
 
             # Build the base ingestion log message

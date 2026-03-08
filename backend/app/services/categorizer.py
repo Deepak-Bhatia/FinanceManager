@@ -4,6 +4,7 @@ Categorization service — applies keyword rules to transactions.
 from sqlalchemy.orm import Session
 from app.models.categorization_rule import CategorizationRule
 from app.models.transaction import Transaction
+from app.models.transaction_metadata import TransactionMetadata
 
 
 DEFAULT_RULES = [
@@ -116,12 +117,13 @@ def categorize_transaction(db: Session, description: str) -> int | None:
 
 def recategorize_all(db: Session) -> int:
     """Re-apply rules to all uncategorized transactions. Returns count updated."""
-    uncategorized = db.query(Transaction).filter(Transaction.category_id.is_(None)).all()
+    # find transactions whose metadata has no category assigned
+    rows = db.query(Transaction, TransactionMetadata).join(TransactionMetadata, Transaction.transaction_hash == TransactionMetadata.transaction_hash).filter(TransactionMetadata.category_id.is_(None)).all()
     count = 0
-    for txn in uncategorized:
+    for txn, meta in rows:
         cat_id = categorize_transaction(db, txn.description)
         if cat_id:
-            txn.category_id = cat_id
+            meta.category_id = cat_id
             count += 1
     db.commit()
     return count

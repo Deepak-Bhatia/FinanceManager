@@ -22,6 +22,7 @@ def get_db():
 
 def init_db():
     from app.models.transaction import Transaction  # noqa: F401
+    from app.models.transaction_metadata import TransactionMetadata  # noqa: F401
     from app.models.category import Category  # noqa: F401
     from app.models.account import Account  # noqa: F401
     from app.models.categorization_rule import CategorizationRule  # noqa: F401

@@ -55,7 +55,7 @@ def credit_card_transactions(
     txns = q.order_by(Transaction.date.desc(), Transaction.id.desc()).all()
 
     # Fetch category and account lookups
-    cat_ids = list({t.category_id for t in txns if t.category_id})
+    cat_ids = list({(t.metadata_record.category_id if t.metadata_record else None) for t in txns if (t.metadata_record and t.metadata_record.category_id)})
     acct_ids = list({t.account_id for t in txns if t.account_id})
     cat_lookup = {}
     acct_lookup = {}
@@ -73,11 +73,14 @@ def credit_card_transactions(
             "description": t.description,
             "amount": round(t.amount, 2),
             "type": t.type,
-            "category": cat_lookup.get(t.category_id, "Uncategorized"),
+            "category": cat_lookup.get((t.metadata_record.category_id if t.metadata_record else None), "Uncategorized"),
             "account": acct_lookup.get(t.account_id, "Unknown"),
-            "category_id": t.category_id,
+            "category_id": (t.metadata_record.category_id if t.metadata_record else None),
             "account_id": t.account_id,
             "notes": t.notes,
+            "tags": (t.metadata_record.tags if t.metadata_record else None),
+            "source": t.source,
+            "source_file": t.source_file,
         }
         for t in txns
     ]
