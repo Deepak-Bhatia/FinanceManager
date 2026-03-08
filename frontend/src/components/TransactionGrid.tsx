@@ -278,8 +278,11 @@ export default function TransactionGrid({
                     )}
                   </td>
                   
-                  <td className="px-4 py-3 text-xs text-[var(--text-secondary)] max-w-[120px] truncate" title={t.source_file}>
-                    {t.source_file}
+                  <td className="px-4 py-3 text-xs text-[var(--text-secondary)] max-w-[140px]" title={t.source_file}>
+                    <span className="inline-flex items-center gap-1.5 truncate">
+                      {t.account_glyph && <span className="text-sm flex-shrink-0">{t.account_glyph}</span>}
+                      <span className="truncate">{t.source_file}</span>
+                    </span>
                   </td>
                   {showActions && <td className="px-4 py-3">
                     <div className="flex items-center gap-1">

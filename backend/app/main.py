@@ -8,7 +8,7 @@ from app.database import init_db, SessionLocal
 from app.models.category import Category, DEFAULT_CATEGORIES
 from app.services.categorizer import seed_rules
 
-from app.routers import upload, transactions, dashboard, categories, creditcards, emis, cards, audit, backups
+from app.routers import upload, transactions, dashboard, categories, creditcards, emis, cards, audit, backups, accounts
 
 app = FastAPI(title="PersonalFinance Manager", version="1.0.0")
 
@@ -29,6 +29,7 @@ app.include_router(emis.router)
 app.include_router(cards.router)
 app.include_router(audit.router)
 app.include_router(backups.router)
+app.include_router(accounts.router)
 
 
 @app.on_event("startup")

@@ -64,7 +64,7 @@ def credit_card_transactions(
         cat_lookup = {c.id: c.name for c in cats}
     if acct_ids:
         accts = db.query(Account).filter(Account.id.in_(acct_ids)).all()
-        acct_lookup = {a.id: a.name for a in accts}
+        acct_lookup = {a.id: {"name": a.name, "glyph": a.glyph} for a in accts}
 
     items = [
         {
@@ -74,7 +74,8 @@ def credit_card_transactions(
             "amount": round(t.amount, 2),
             "type": t.type,
             "category": cat_lookup.get((t.metadata_record.category_id if t.metadata_record else None), "Uncategorized"),
-            "account": acct_lookup.get(t.account_id, "Unknown"),
+            "account": acct_lookup.get(t.account_id, {}).get("name", "Unknown"),
+            "account_glyph": acct_lookup.get(t.account_id, {}).get("glyph"),
             "category_id": (t.metadata_record.category_id if t.metadata_record else None),
             "account_id": t.account_id,
             "notes": t.notes,

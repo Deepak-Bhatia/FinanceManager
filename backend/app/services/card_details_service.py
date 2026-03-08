@@ -185,6 +185,7 @@ def get_card_details(db: Session) -> Dict[str, Any]:
             "id": a.id,
             "name": a.name,
             "bank": a.bank,
+            "glyph": a.glyph,
             "network": meta.get("network", "Unknown"),
             "cycle_start": meta.get("cycle_start", 1),
             "cycle_end": meta.get("cycle_end", 28),

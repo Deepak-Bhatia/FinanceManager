@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getCardDetails } from '../api';
+import { getCardDetails, patchAccount } from '../api';
 import { CreditCard, Shield, CheckCircle2, AlertCircle, Banknote } from 'lucide-react';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -8,9 +8,18 @@ const MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep
 export default function CardDetails() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [glyphs, setGlyphs] = useState<Record<number, string>>({});
+  const [savingId, setSavingId] = useState<number | null>(null);
 
   useEffect(() => {
-    getCardDetails().then(setData).finally(() => setLoading(false));
+    getCardDetails().then(d => {
+      setData(d);
+      if (d?.cards) {
+        const init: Record<number, string> = {};
+        d.cards.forEach((c: any) => { init[c.id] = c.glyph || ''; });
+        setGlyphs(init);
+      }
+    }).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <p className="text-[var(--text-secondary)]">Loading…</p>;
@@ -59,6 +68,30 @@ export default function CardDetails() {
                 }`}>
                   {card.is_free ? 'Free' : fmt(card.annual_fee) + '/yr'}
                 </span>
+              </div>
+              {/* Glyph editor */}
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-xs text-[var(--text-secondary)]">Card icon</span>
+                <input
+                  type="text"
+                  maxLength={2}
+                  placeholder="🏦"
+                  value={glyphs[card.id] ?? ''}
+                  onChange={e => setGlyphs(prev => ({ ...prev, [card.id]: e.target.value }))}
+                  className="w-12 text-center bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-1 py-1 text-lg"
+                  title="Card glyph (emoji displayed in transaction rows)"
+                />
+                <button
+                  onClick={async () => {
+                    setSavingId(card.id);
+                    await patchAccount(card.id, { glyph: glyphs[card.id] });
+                    setSavingId(null);
+                  }}
+                  disabled={savingId === card.id}
+                  className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {savingId === card.id ? 'Saving…' : 'Save'}
+                </button>
               </div>
             </div>
 

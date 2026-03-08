@@ -26,7 +26,7 @@ def _is_emi(description: str) -> bool:
 def get_credit_card_accounts(db: Session) -> List[Dict[str, Any]]:
     """List all credit card accounts."""
     accounts = db.query(Account).filter(Account.type == "credit_card").all()
-    return [{"id": a.id, "name": a.name, "bank": a.bank} for a in accounts]
+    return [{"id": a.id, "name": a.name, "bank": a.bank, "glyph": a.glyph} for a in accounts]
 
 
 def get_available_billing_cycles(db: Session) -> List[Dict[str, Any]]:

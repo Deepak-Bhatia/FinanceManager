@@ -51,7 +51,9 @@ export const getCardDetails = () => api.get('/cards').then(r => r.data);
 export const getAuditLogs = (params: Record<string, any>) =>
   api.get('/audit', { params }).then(r => r.data);
 
-// Backups
+// Accounts
+export const patchAccount = (id: number, data: { glyph?: string }) =>
+  api.patch(`/accounts/${id}`, data).then(r => r.data);
 export const listBackups = () => api.get('/backup/list').then(r => r.data);
 export const createBackup = () => api.post('/backup/create').then(r => r.data);
 export const restoreBackup = (name: string) => api.post(`/backup/restore/${encodeURIComponent(name)}`).then(r => r.data);

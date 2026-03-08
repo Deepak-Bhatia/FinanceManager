@@ -10,3 +10,4 @@ class Account(Base):
     name = Column(String, unique=True, nullable=False)
     type = Column(String, nullable=False)  # "savings", "current", "credit_card"
     bank = Column(String, nullable=False)
+    glyph = Column(String, nullable=True)  # emoji/short icon for this card

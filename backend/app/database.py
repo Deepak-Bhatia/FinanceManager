@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 from app.config import DATABASE_URL
@@ -31,3 +31,11 @@ def init_db():
     from app.models.audit_log import AuditLog  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+
+    # Column migrations for existing DBs
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE accounts ADD COLUMN glyph TEXT"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists

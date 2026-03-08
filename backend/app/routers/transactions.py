@@ -76,7 +76,14 @@ def list_transactions(
     total = q.count()
     total_income = q.filter(Transaction.type == "credit").with_entities(func.sum(Transaction.amount)).scalar() or 0
     total_expense = q.filter(Transaction.type == "debit").with_entities(func.sum(Transaction.amount)).scalar() or 0
-    items = q.order_by(Transaction.date.desc()).offset((page - 1) * per_page).limit(per_page).all()
+    items_list = q.order_by(Transaction.date.desc()).offset((page - 1) * per_page).limit(per_page).all()
+
+    # Build account glyph map for this page
+    acct_ids = list({t.account_id for t in items_list if t.account_id})
+    acct_glyph_map: dict = {}
+    if acct_ids:
+        accts = db.query(Account).filter(Account.id.in_(acct_ids)).all()
+        acct_glyph_map = {a.id: a.glyph for a in accts}
 
     return {
         "total": total,
@@ -85,7 +92,7 @@ def list_transactions(
         "total_income": round(total_income, 2),
         "total_expense": round(total_expense, 2),
         "net_savings": round(total_income - total_expense, 2),
-        "items": [_serialize(t) for t in items],
+        "items": [_serialize(t, acct_glyph_map.get(t.account_id)) for t in items_list],
     }
 
 
@@ -200,7 +207,7 @@ def delete_transaction(txn_id: int, db: Session = Depends(get_db)):
     return {"deleted": True}
 
 
-def _serialize(t: Transaction) -> dict:
+def _serialize(t: Transaction, account_glyph: Optional[str] = None) -> dict:
     return {
         "id": t.id,
         "transaction_hash": t.transaction_hash,
@@ -210,6 +217,7 @@ def _serialize(t: Transaction) -> dict:
         "type": t.type,
         "category_id": (t.metadata_record.category_id if t.metadata_record else None),
         "account_id": t.account_id,
+        "account_glyph": account_glyph,
         "source": t.source,
         "source_file": t.source_file,
         "month": t.month,
