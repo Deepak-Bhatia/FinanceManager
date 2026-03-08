@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getTransactions, getCategories, updateTransaction, deleteTransaction } from '../api';
-import { Search, Trash2, Pencil, Check, X, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Search, Trash2, Pencil, Check, X, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, TrendingDown, TrendingUp, PiggyBank, Receipt } from 'lucide-react';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
@@ -19,6 +19,7 @@ export default function Transactions() {
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editCatId, setEditCatId] = useState<number | null>(null);
+  const [accountType, setAccountType] = useState('');
 
   useEffect(() => {
     getCategories().then(setCategories);
@@ -26,10 +27,10 @@ export default function Transactions() {
 
   useEffect(() => {
     setLoading(true);
-    getTransactions({ month, year, search: search || undefined, page, per_page: 50 })
+    getTransactions({ month, year, search: search || undefined, account_type: accountType || undefined, page, per_page: 50 })
       .then(setData)
       .finally(() => setLoading(false));
-  }, [month, year, search, page]);
+  }, [month, year, search, accountType, page]);
 
   const startEditing = (t: any) => {
     setEditingId(t.id);
@@ -125,6 +126,52 @@ export default function Transactions() {
             className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm">
             {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
           </select>
+          <select value={accountType} onChange={e => { setAccountType(e.target.value); setPage(1); }}
+            className="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm">
+            <option value="">All Sources</option>
+            <option value="credit_card">Credit Card</option>
+            <option value="savings">Savings Account</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Summary Stats */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center">
+            <TrendingDown size={20} className="text-red-500" />
+          </div>
+          <div>
+            <p className="text-xs text-[var(--text-secondary)]">Total Expense</p>
+            <p className="text-lg font-bold text-[var(--text-primary)]">{fmt(data.total_expense || 0)}</p>
+          </div>
+        </div>
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
+            <TrendingUp size={20} className="text-green-500" />
+          </div>
+          <div>
+            <p className="text-xs text-[var(--text-secondary)]">Total Income</p>
+            <p className="text-lg font-bold text-[var(--text-primary)]">{fmt(data.total_income || 0)}</p>
+          </div>
+        </div>
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+            <PiggyBank size={20} className="text-blue-500" />
+          </div>
+          <div>
+            <p className="text-xs text-[var(--text-secondary)]">Net Savings</p>
+            <p className="text-lg font-bold text-[var(--text-primary)]">{fmt(data.net_savings || 0)}</p>
+          </div>
+        </div>
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center">
+            <Receipt size={20} className="text-amber-500" />
+          </div>
+          <div>
+            <p className="text-xs text-[var(--text-secondary)]">Transactions</p>
+            <p className="text-lg font-bold text-[var(--text-primary)]">{data.total || 0}</p>
+          </div>
         </div>
       </div>
 

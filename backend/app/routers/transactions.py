@@ -5,8 +5,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.database import get_db
 from app.models.transaction import Transaction
+from app.models.account import Account
 from app.models.audit_log import AuditLog
 from app.models.category import Category
 
@@ -39,6 +41,7 @@ def list_transactions(
     year: Optional[int] = Query(None),
     category_id: Optional[int] = Query(None),
     account_id: Optional[int] = Query(None),
+    account_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
@@ -54,16 +57,23 @@ def list_transactions(
         q = q.filter(Transaction.category_id == category_id)
     if account_id:
         q = q.filter(Transaction.account_id == account_id)
+    if account_type:
+        q = q.join(Account, Transaction.account_id == Account.id).filter(Account.type == account_type)
     if search:
         q = q.filter(Transaction.description.ilike(f"%{search}%"))
 
     total = q.count()
+    total_income = q.filter(Transaction.type == "credit").with_entities(func.sum(Transaction.amount)).scalar() or 0
+    total_expense = q.filter(Transaction.type == "debit").with_entities(func.sum(Transaction.amount)).scalar() or 0
     items = q.order_by(Transaction.date.desc()).offset((page - 1) * per_page).limit(per_page).all()
 
     return {
         "total": total,
         "page": page,
         "per_page": per_page,
+        "total_income": round(total_income, 2),
+        "total_expense": round(total_expense, 2),
+        "net_savings": round(total_income - total_expense, 2),
         "items": [_serialize(t) for t in items],
     }
 
