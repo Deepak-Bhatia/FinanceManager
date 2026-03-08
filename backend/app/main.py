@@ -40,7 +40,7 @@ def _seed_categories():
     try:
         if db.query(Category).count() == 0:
             for cat in DEFAULT_CATEGORIES:
-                db.add(Category(name=cat["name"], color=cat["color"]))
+                db.add(Category(name=cat["name"], color=cat["color"], icon=cat.get("icon")))
             db.commit()
         seed_rules(db)
     finally:

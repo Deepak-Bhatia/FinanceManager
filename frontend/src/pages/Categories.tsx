@@ -51,6 +51,7 @@ export default function Categories() {
             {categories.map(c => (
               <div key={c.id} className="flex items-center gap-3 px-4 py-3">
                 <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: c.color }} />
+                {c.icon && <span className="text-base">{c.icon}</span>}
                 <span className="text-sm">{c.name}</span>
               </div>
             ))}
@@ -129,6 +130,7 @@ export default function Categories() {
                       {cat && (
                         <span className="flex items-center gap-1.5 text-sm">
                           <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+                          {cat.icon && <span>{cat.icon}</span>}
                           {cat.name}
                         </span>
                       )}

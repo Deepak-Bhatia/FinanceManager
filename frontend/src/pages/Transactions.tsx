@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getTransactions, getCategories, updateTransaction, deleteTransaction } from '../api';
-import { Search, Trash2, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Search, Trash2, Pencil, Check, X, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
@@ -17,6 +17,8 @@ export default function Transactions() {
   const [loading, setLoading] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editCatId, setEditCatId] = useState<number | null>(null);
 
   useEffect(() => {
     getCategories().then(setCategories);
@@ -29,14 +31,27 @@ export default function Transactions() {
       .finally(() => setLoading(false));
   }, [month, year, search, page]);
 
-  const handleCategoryChange = async (txnId: number, categoryId: number) => {
-    await updateTransaction(txnId, { category_id: categoryId || null });
+  const startEditing = (t: any) => {
+    setEditingId(t.id);
+    setEditCatId(t.category_id || null);
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditCatId(null);
+  };
+
+  const saveEditing = async () => {
+    if (editingId === null) return;
+    await updateTransaction(editingId, { category_id: editCatId });
     setData((prev: any) => ({
       ...prev,
       items: prev.items.map((t: any) =>
-        t.id === txnId ? { ...t, category_id: categoryId || null } : t
+        t.id === editingId ? { ...t, category_id: editCatId } : t
       ),
     }));
+    setEditingId(null);
+    setEditCatId(null);
   };
 
   const handleDelete = async (txnId: number) => {
@@ -124,7 +139,7 @@ export default function Transactions() {
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort('type')}><span className="inline-flex items-center">Type<SortIcon col="type" /></span></th>
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort('category')}><span className="inline-flex items-center">Category<SortIcon col="category" /></span></th>
                 <th className="px-4 py-3 cursor-pointer select-none" onClick={() => toggleSort('source')}><span className="inline-flex items-center">Source<SortIcon col="source" /></span></th>
-                <th className="px-4 py-3 w-10"></th>
+                <th className="px-4 py-3 w-20"></th>
               </tr>
             </thead>
             <tbody>
@@ -138,7 +153,12 @@ export default function Transactions() {
                   return (
                     <tr key={t.id} className="border-b border-[var(--border)] hover:bg-[var(--bg-primary)] transition-colors">
                       <td className="px-4 py-3 whitespace-nowrap">{t.date}</td>
-                      <td className="px-4 py-3 max-w-xs truncate" title={t.description}>{t.description}</td>
+                      <td className="px-4 py-3 max-w-xs truncate" title={t.description}>
+                        <span className="inline-flex items-center gap-2">
+                          {cat?.icon && <span className="text-base flex-shrink-0">{cat.icon}</span>}
+                          <span className="truncate">{t.description}</span>
+                        </span>
+                      </td>
                       <td className={`px-4 py-3 text-right font-medium whitespace-nowrap ${t.type === 'credit' ? 'text-green-400' : 'text-red-400'}`}>
                         {t.type === 'credit' ? '+' : '-'}{fmt(t.amount)}
                       </td>
@@ -148,24 +168,53 @@ export default function Transactions() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <select
-                          value={t.category_id || ''}
-                          onChange={e => handleCategoryChange(t.id, Number(e.target.value))}
-                          className="bg-[var(--bg-primary)] border border-[var(--border)] rounded px-2 py-1 text-xs w-32"
-                        >
-                          <option value="">Uncategorized</option>
-                          {categories.map((c: any) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
+                        {editingId === t.id ? (
+                          <select
+                            value={editCatId || ''}
+                            onChange={e => setEditCatId(Number(e.target.value) || null)}
+                            className="bg-[var(--bg-primary)] border border-[var(--border)] rounded px-2 py-1 text-xs w-36"
+                          >
+                            <option value="">Uncategorized</option>
+                            {categories.map((c: any) => (
+                              <option key={c.id} value={c.id}>{c.icon ? c.icon + ' ' : ''}{c.name}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          cat ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs">
+                              {cat.icon && <span className="text-sm">{cat.icon}</span>}
+                              <span style={{ color: cat.color }}>{cat.name}</span>
+                            </span>
+                          ) : (
+                            <span className="text-xs text-[var(--text-secondary)] italic">Uncategorized</span>
+                          )
+                        )}
                       </td>
                       <td className="px-4 py-3 text-xs text-[var(--text-secondary)] max-w-[120px] truncate" title={t.source_file}>
                         {t.source_file}
                       </td>
                       <td className="px-4 py-3">
-                        <button onClick={() => handleDelete(t.id)} className="text-[var(--text-secondary)] hover:text-red-400">
-                          <Trash2 size={14} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {editingId === t.id ? (
+                            <>
+                              <button onClick={saveEditing} className="text-green-400 hover:text-green-300" title="Save">
+                                <Check size={14} />
+                              </button>
+                              <button onClick={cancelEditing} className="text-[var(--text-secondary)] hover:text-[var(--danger)]" title="Cancel">
+                                <X size={14} />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={() => startEditing(t)} className="text-[var(--text-secondary)] hover:text-blue-400" title="Edit">
+                                <Pencil size={14} />
+                              </button>
+                              <button onClick={() => handleDelete(t.id)} className="text-[var(--text-secondary)] hover:text-red-400" title="Delete">
+                                <Trash2 size={14} />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
