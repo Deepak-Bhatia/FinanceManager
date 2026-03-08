@@ -45,3 +45,9 @@ export const getCardDetails = () => api.get('/cards').then(r => r.data);
 // Audit
 export const getAuditLogs = (params: Record<string, any>) =>
   api.get('/audit', { params }).then(r => r.data);
+
+// Backups
+export const listBackups = () => api.get('/backup/list').then(r => r.data);
+export const createBackup = () => api.post('/backup/create').then(r => r.data);
+export const restoreBackup = (name: string) => api.post(`/backup/restore/${encodeURIComponent(name)}`).then(r => r.data);
+export const cleanData = () => api.post('/backup/clean').then(r => r.data);

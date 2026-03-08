@@ -18,6 +18,10 @@ export default function Upload() {
   const [loading, setLoading] = useState(true);
   const [parsing, setParsing] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, ParseResult>>({});
+  const [backups, setBackups] = useState<string[]>([]);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [cleanLoading, setCleanLoading] = useState(false);
 
   const loadFolders = () => {
     setLoading(true);
@@ -25,6 +29,20 @@ export default function Upload() {
   };
 
   useEffect(() => { loadFolders(); }, []);
+
+  useEffect(() => { loadBackups(); }, []);
+
+  const loadBackups = async () => {
+    setBackupLoading(true);
+    try {
+      const b = await (await import('../api')).listBackups();
+      setBackups(b);
+    } catch (e) {
+      setBackups([]);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
 
   const handleParse = async (folderName: string) => {
     setParsing(folderName);
@@ -52,6 +70,53 @@ export default function Upload() {
 
   return (
     <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-lg font-semibold">Database Backup & Restore</h3>
+          <p className="text-xs text-[var(--text-secondary)]">Create a snapshot before cleaning data; restore from available backups.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              setCleanLoading(true);
+              try {
+                await (await import('../api')).cleanData();
+                await loadBackups();
+                loadFolders();
+              } finally {
+                setCleanLoading(false);
+              }
+            }}
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm"
+            disabled={cleanLoading}
+          >
+            {cleanLoading ? 'Cleaning…' : 'Clean Data (backup first)'}
+          </button>
+
+          <div className="flex items-center gap-2">
+            <select
+              onChange={e => {
+                const val = e.target.value;
+                if (!val) return;
+                setRestoreLoading(true);
+                (async () => {
+                  try {
+                    await (await import('../api')).restoreBackup(val);
+                    loadFolders();
+                  } finally {
+                    setRestoreLoading(false);
+                    loadBackups();
+                  }
+                })();
+              }}
+              className="px-2 py-1 border rounded bg-[var(--bg-primary)] text-sm"
+            >
+              <option value="">Restore from backup</option>
+              {backups.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold">Import Statements</h2>
         <button onClick={loadFolders} className="px-4 py-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-sm hover:bg-[var(--border)] transition-colors">
