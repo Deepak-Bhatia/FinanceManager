@@ -41,3 +41,7 @@ export const getEmis = () => api.get('/emis').then(r => r.data);
 
 // Card Details
 export const getCardDetails = () => api.get('/cards').then(r => r.data);
+
+// Audit
+export const getAuditLogs = (params: Record<string, any>) =>
+  api.get('/audit', { params }).then(r => r.data);

@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.transaction import Transaction
+from app.models.audit_log import AuditLog
+from app.models.category import Category
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
@@ -101,7 +103,33 @@ def update_transaction(txn_id: int, body: TransactionUpdate, db: Session = Depen
     txn = db.query(Transaction).get(txn_id)
     if not txn:
         raise HTTPException(404, "Transaction not found")
-    for field, val in body.dict(exclude_unset=True).items():
+
+    changes = body.dict(exclude_unset=True)
+    for field, val in changes.items():
+        old_val = getattr(txn, field)
+        if old_val != val:
+            if field == "category_id":
+                old_cat = db.query(Category).get(old_val) if old_val else None
+                new_cat = db.query(Category).get(val) if val else None
+                old_name = old_cat.name if old_cat else "Uncategorized"
+                new_name = new_cat.name if new_cat else "Uncategorized"
+                db.add(AuditLog(
+                    event_type="category_change",
+                    summary=f"Category changed from '{old_name}' to '{new_name}' on txn #{txn_id}: {txn.description}",
+                    details=f'{{"transaction_id": {txn_id}, "field": "category_id", "old": "{old_name}", "new": "{new_name}"}}',
+                ))
+            elif field == "type":
+                db.add(AuditLog(
+                    event_type="type_change",
+                    summary=f"Type changed from '{old_val}' to '{val}' on txn #{txn_id}: {txn.description}",
+                    details=f'{{"transaction_id": {txn_id}, "field": "type", "old": "{old_val}", "new": "{val}"}}',
+                ))
+            else:
+                db.add(AuditLog(
+                    event_type="field_change",
+                    summary=f"{field} changed on txn #{txn_id}: {txn.description}",
+                    details=f'{{"transaction_id": {txn_id}, "field": "{field}", "old": "{old_val}", "new": "{val}"}}',
+                ))
         setattr(txn, field, val)
     db.commit()
     db.refresh(txn)

@@ -27,5 +27,6 @@ def init_db():
     from app.models.categorization_rule import CategorizationRule  # noqa: F401
     from app.models.ingestion_log import IngestionLog  # noqa: F401
     from app.models.emi_detail import EmiDetail  # noqa: F401
+    from app.models.audit_log import AuditLog  # noqa: F401
 
     Base.metadata.create_all(bind=engine)

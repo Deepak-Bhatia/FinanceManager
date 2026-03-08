@@ -159,11 +159,11 @@ export default function Transactions() {
                           <span className="truncate">{t.description}</span>
                         </span>
                       </td>
-                      <td className={`px-4 py-3 text-right font-medium whitespace-nowrap ${t.type === 'credit' ? 'text-green-400' : 'text-red-400'}`}>
+                      <td className={`px-4 py-3 text-right font-medium whitespace-nowrap ${t.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
                         {t.type === 'credit' ? '+' : '-'}{fmt(t.amount)}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded text-xs ${t.type === 'credit' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${t.type === 'credit' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                           {t.type}
                         </span>
                       </td>

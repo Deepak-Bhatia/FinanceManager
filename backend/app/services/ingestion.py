@@ -16,6 +16,7 @@ from app.parsers.pdf_parser import detect_and_parse
 from app.parsers.excel_parser import ExcelParser
 from app.parsers.base import ParseResult
 from app.services.categorizer import categorize_transaction
+from app.models.audit_log import AuditLog
 
 
 excel_parser = ExcelParser()
@@ -179,4 +180,20 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
             results["errors"].append({"file": fname, "error": str(e)})
 
     db.commit()
+
+    import json
+    db.add(AuditLog(
+        event_type="parse",
+        summary=f"Parsed folder '{folder_name}': {results['files_processed']} files, {results['transactions_added']} added, {results['transactions_skipped']} duplicates",
+        details=json.dumps({
+            "folder": folder_name,
+            "files_processed": results["files_processed"],
+            "transactions_added": results["transactions_added"],
+            "transactions_skipped": results["transactions_skipped"],
+            "errors": results["errors"],
+            "file_details": results["details"],
+        }),
+    ))
+    db.commit()
+
     return results
