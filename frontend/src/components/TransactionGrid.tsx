@@ -1,7 +1,63 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { Pencil, Trash2, Check, X, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 
 const fmt = (n: number) => '\u20b9' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+
+// TagInput component for editing tags as chips
+function TagInput({ value, onChange }: { value: string, onChange?: (val: string) => void }) {
+  const [input, setInput] = useState('');
+  const tags = value.split(',').map(t => t.trim()).filter(Boolean);
+  const inputRef = useRef(null as HTMLInputElement | null);
+
+  const addTag = (tag: string) => {
+    const newTag = tag.trim();
+    if (!newTag || tags.includes(newTag)) return;
+    const newTags = [...tags, newTag];
+    onChange?.(newTags.join(','));
+    setInput('');
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const removeTag = (idx: number) => {
+    const newTags = tags.filter((_, i) => i !== idx);
+    onChange?.(newTags.join(','));
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const handleInput = (e: any) => {
+    setInput(e.target.value);
+  };
+
+  const handleKeyDown = (e: any) => {
+    if ((e.key === 'Enter' || e.key === ',') && input.trim()) {
+      e.preventDefault();
+      addTag(input);
+    } else if (e.key === 'Backspace' && !input && tags.length > 0) {
+      removeTag(tags.length - 1);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1 border border-[var(--border)] rounded px-2 py-1 bg-[var(--bg-primary)] min-h-[36px]">
+      {tags.map((tag, idx) => (
+        <span key={idx} className="bg-blue-700 text-white px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1">
+          {tag}
+          <button type="button" className="ml-1 text-white hover:text-gray-200 focus:outline-none" onClick={() => removeTag(idx)} aria-label="Remove tag">×</button>
+        </span>
+      ))}
+      <input
+        ref={inputRef}
+        type="text"
+        value={input}
+        onChange={handleInput}
+        onKeyDown={handleKeyDown}
+        className="outline-none border-none bg-transparent text-xs min-w-[60px] flex-1 py-1"
+        placeholder={tags.length === 0 ? 'Add tag...' : ''}
+        aria-label="Add tag"
+      />
+    </div>
+  );
+}
 
 export type TransactionGridProps = {
   items: any[];
@@ -72,6 +128,7 @@ export default function TransactionGrid({
       (t.amount && String(t.amount).toLowerCase().includes(s)) ||
       (t.type && t.type.toLowerCase().includes(s)) ||
       (catMap[t.category_id]?.name && catMap[t.category_id].name.toLowerCase().includes(s)) ||
+      (t.tags && t.tags.toLowerCase().includes(s)) ||
       (t.source_file && t.source_file.toLowerCase().includes(s))
     );
   }
@@ -194,24 +251,21 @@ export default function TransactionGrid({
                     )}
                   </td>
                   {/* Tags column */}
-                  <td className="px-4 py-3 text-xs max-w-[160px]">
+                  <td className="px-4 py-3 text-xs max-w-[260px]">
                     {editingId === t.id ? (
-                      <input
-                        type="text"
+                      <TagInput
                         value={editTags ?? ''}
-                        onChange={e => onEditTagsChange?.(e.target.value)}
-                        className="border border-[var(--border)] rounded px-2 py-1 text-xs w-36 bg-[var(--bg-primary)]"
-                        placeholder="Comma separated (e.g. food,groceries)"
-                        title="Separate multiple tags with commas"
+                        onChange={onEditTagsChange}
                       />
                     ) : (
                       <div className="flex flex-wrap gap-1">
                         {(t.tags || '').split(',').filter(Boolean).map((tag: string, idx: number) => (
-                          <span key={idx} className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium truncate max-w-[60px]" title={tag.trim()}>{tag.trim()}</span>
+                          <span key={idx} className="bg-blue-700 text-white px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 truncate max-w-[80px]">{tag.trim()}</span>
                         ))}
                       </div>
                     )}
                   </td>
+                  
                   <td className="px-4 py-3 text-xs text-[var(--text-secondary)] max-w-[120px] truncate" title={t.source_file}>
                     {t.source_file}
                   </td>
