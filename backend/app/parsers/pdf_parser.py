@@ -187,12 +187,17 @@ class ICICISavingsParser(BaseParser):
                         continue
 
                     # Determine debit/credit from running balance
-                    if prev_balance is not None:
-                        if abs(round(prev_balance + amt, 2) - balance) < 0.01:
-                            txn_type = "credit"  # deposit
+                    try:
+                        if prev_balance is not None and balance is not None:
+                            # both are numbers — do a tolerant comparison
+                            if abs(round(prev_balance + amt, 2) - balance) < 0.01:
+                                txn_type = "credit"  # deposit
+                            else:
+                                txn_type = "debit"  # withdrawal
                         else:
-                            txn_type = "debit"  # withdrawal
-                    else:
+                            txn_type = "debit"
+                    except Exception:
+                        # Defensive fallback if any value is unexpected
                         txn_type = "debit"
 
                     # Build description from pending lines + date line text

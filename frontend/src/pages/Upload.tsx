@@ -4,13 +4,15 @@ import { FolderOpen, Play, CheckCircle, XCircle, Loader2, FileText } from 'lucid
 
 interface FolderInfo { name: string; files: string[]; }
 interface FileDetail { file: string; parsed: number; added: number; skipped: number; }
+type ErrorItem = string | { file?: string; error?: string };
+
 interface ParseResult {
   folder: string;
   files_processed: number;
   transactions_added: number;
   transactions_skipped: number;
   details: FileDetail[];
-  errors: string[];
+  errors: ErrorItem[];
 }
 
 export default function Upload() {
@@ -199,9 +201,18 @@ export default function Upload() {
                 {result && (
                   <div className="border-t border-[var(--border)] px-5 py-3">
                     {result.errors.length > 0 && (
-                      <div className="flex items-center gap-2 mb-2 text-red-400">
-                        <XCircle size={16} />
-                        <span className="text-sm">{result.errors.join(', ')}</span>
+                      <div className="flex flex-col gap-1 mb-2 text-red-400">
+                        <div className="flex items-center gap-2">
+                          <XCircle size={16} />
+                          <span className="text-sm">Errors</span>
+                        </div>
+                        <div className="ml-6 text-sm">
+                          {result.errors.map((e, idx) => (
+                            <div key={idx} className="truncate">
+                              {typeof e === 'string' ? e : `${e.file ?? ''}${e.file ? ': ' : ''}${e.error ?? JSON.stringify(e)}`}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                     <div className="flex items-center gap-2 mb-2">
