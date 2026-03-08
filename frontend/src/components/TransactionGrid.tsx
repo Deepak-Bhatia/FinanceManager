@@ -76,6 +76,8 @@ export type TransactionGridProps = {
   sortDir?: 'asc' | 'desc';
   onSortChange?: (key: string) => void;
   showActions?: boolean;
+  initialShowRecent?: boolean;
+  initialShowTop?: boolean;
 };
 
 export default function TransactionGrid({
@@ -95,6 +97,8 @@ export default function TransactionGrid({
   sortDir: propSortDir,
   onSortChange: propOnSortChange,
   showActions = true,
+  initialShowRecent,
+  initialShowTop,
 }: TransactionGridProps) {
   const catMap = useMemo(() => Object.fromEntries(categories.map((c: any) => [c.id, c])), [categories]);
 
@@ -115,8 +119,8 @@ export default function TransactionGrid({
 
   // Filter/search state
   const [search, setSearch] = useState('');
-  const [showRecent, setShowRecent] = useState(true);
-  const [showTop, setShowTop] = useState(false);
+  const [showRecent, setShowRecent] = useState(initialShowRecent ?? true);
+  const [showTop, setShowTop] = useState(initialShowTop ?? false);
 
   // Filtered, sorted, and sliced items
   let filtered = items;
@@ -156,11 +160,14 @@ export default function TransactionGrid({
   if (showRecent && !showTop) {
     filtered = filtered.slice(0, 20);
   } else if (showTop && !showRecent) {
-    filtered = [...filtered].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)).slice(0, 20);
+    // Top 20 spends: consider only spend (debit) transactions, sorted by absolute amount
+    const spends = filtered.filter(t => (t.type || '').toLowerCase() !== 'credit');
+    filtered = [...spends].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)).slice(0, 20);
   } else if (showRecent && showTop) {
-    // If both checked, show intersection (top 20 of recent 20)
+    // If both checked, show top spends within the recent 20
     const recent = filtered.slice(0, 20);
-    filtered = [...recent].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)).slice(0, 20);
+    const recentSpends = recent.filter(t => (t.type || '').toLowerCase() !== 'credit');
+    filtered = [...recentSpends].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)).slice(0, 20);
   }
 
   const SortIcon = ({ col }: { col: string }) => {

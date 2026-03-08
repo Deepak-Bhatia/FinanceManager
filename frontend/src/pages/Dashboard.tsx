@@ -13,6 +13,8 @@ const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDi
 export default function Dashboard() {
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [triedPrevious, setTriedPrevious] = useState(false);
+  const initialRef = { month: new Date().getMonth() + 1, year: new Date().getFullYear() };
   const [summary, setSummary] = useState<any>(null);
   const [byCategory, setByCategory] = useState<any[]>([]);
   const [trend, setTrend] = useState<any[]>([]);
@@ -22,7 +24,22 @@ export default function Dashboard() {
   const params = { month, year };
 
   useEffect(() => {
-    getSummary(params).then(setSummary);
+    getSummary(params).then((s: any) => {
+      setSummary(s);
+      // If current month (initial load) has no transactions, fallback once to previous month
+      const isInitialMonth = month === initialRef.month && year === initialRef.year;
+      const noData = !s || (typeof s.transaction_count === 'number' && s.transaction_count === 0);
+      if (isInitialMonth && noData && !triedPrevious) {
+        // compute previous month/year
+        let pm = month - 1;
+        let py = year;
+        if (pm <= 0) { pm = 12; py = year - 1; }
+        setTriedPrevious(true);
+        setMonth(pm);
+        setYear(py);
+        return; // wait for effect to re-run with previous month
+      }
+    });
     getByCategory(params).then(setByCategory);
     getTopMerchants(params).then(setTopMerchants);
     getByAccount(params).then(setByAccount);
