@@ -9,6 +9,7 @@ from typing import List, Optional
 import pdfplumber
 
 from app.parsers.base import BaseParser, ParsedTransaction, ParsedEmiDetail, ParseResult
+import logging
 
 
 class AirtelAxisParser(BaseParser):
@@ -19,6 +20,7 @@ class AirtelAxisParser(BaseParser):
 
     def parse(self, filepath: str) -> List[ParsedTransaction]:
         transactions = []
+        filename = filepath.split("\\")[-1].split("/")[-1]
         with pdfplumber.open(filepath) as pdf:
             full_text = "\n".join(p.extract_text() or "" for p in pdf.pages)
 
@@ -304,6 +306,51 @@ class ICICIParser(BaseParser):
             r"EMI\s*/\s*PERSONAL\s+LOAN\s+ON\s+CREDIT\s+CARDS.*?(?=\n\*For EMI|\nPage\s+\d+|\Z)",
             re.DOTALL | re.IGNORECASE,
         )
+        # Before removing the EMI block, try to extract IGST/GST tax lines inside it
+        m_emi = emi_section.search(full_text)
+        if m_emi:
+            emi_block = m_emi.group(0)
+            igst_pat = re.compile(r"(IGST|GST).*?@.*?([\d,]+\.?\d{0,2})", re.IGNORECASE)
+            for im in igst_pat.finditer(emi_block):
+                amt_str = im.group(2)
+                try:
+                    amt = self._clean_amount(amt_str)
+                except Exception:
+                    amt = 0.0
+
+                # Debug logging: record raw match and cleaned amount
+                try:
+                    with open("backend/parser_debug.log", "a", encoding="utf-8") as df:
+                        df.write(f"ICICI IGST MATCH file={filename} raw={im.group(0)!r} amt_str={amt_str!r} cleaned={amt}\n")
+                except Exception:
+                    pass
+
+                # Heuristic: find nearest preceding date (dd/mm/yyyy) within 200 chars
+                start_pos = m_emi.start() + im.start()
+                lookback = full_text[max(0, start_pos - 200): start_pos]
+                date_match = None
+                dm = re.findall(r"(\d{2}/\d{2}/\d{4})", lookback)
+                if dm:
+                    try:
+                        dt = datetime.strptime(dm[-1], "%d/%m/%Y").date()
+                    except Exception:
+                        dt = date.today()
+                else:
+                    dt = date.today()
+
+                desc = im.group(0).strip()
+                if amt > 0:
+                    transactions.append(ParsedTransaction(
+                        date=dt,
+                        description=desc,
+                        amount=amt,
+                        type="debit",
+                        account_name=card_name,
+                        bank="ICICI Bank",
+                        source="credit_card_pdf",
+                    ))
+
+        # remove EMI block so other parsers don't double-parse
         full_text = emi_section.sub("", full_text)
 
         # Pattern: DD/MM/YYYY SerialNo DESCRIPTION [RewardPts] [IntlAmount] AMOUNT [CR]
@@ -561,6 +608,46 @@ class SBIParser(BaseParser):
 
         months_map = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
                        "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
+        # Extract standalone IGST/GST tax lines (preserve cents) before main parsing
+        # Match percent (e.g. @ 18.00%) followed by amount (e.g. 427.34)
+        igst_pat = re.compile(r"(IGST|GST).*?@.*?(?:\d+\.?\d*%?)\s*[,;:\-\s]*([\d,]+\.\d{2})", re.IGNORECASE)
+        for im in igst_pat.finditer(full_text):
+            amt_str = im.group(2)
+            try:
+                amt = self._clean_amount(amt_str)
+            except Exception:
+                amt = 0.0
+            # Debug logging: record raw match and cleaned amount
+            try:
+                with open("backend/parser_debug.log", "a", encoding="utf-8") as df:
+                    df.write(f"SBI IGST MATCH file={filename} raw={im.group(0)!r} amt_str={amt_str!r} cleaned={amt}\n")
+            except Exception:
+                pass
+
+            # Heuristic: find nearest preceding date (DD Mon YY) within 200 chars
+            start_pos = im.start()
+            lookback = full_text[max(0, start_pos - 200): start_pos]
+            dm = re.findall(r"(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2})", lookback, re.IGNORECASE)
+            if dm:
+                try:
+                    ddm = dm[-1]
+                    dt = datetime.strptime(ddm, "%d %b %y").date()
+                except Exception:
+                    dt = date.today()
+            else:
+                dt = date.today()
+
+            desc = im.group(0).strip()
+            if amt > 0:
+                transactions.append(ParsedTransaction(
+                    date=dt,
+                    description=desc,
+                    amount=amt,
+                    type="debit",
+                    account_name="SBI Card",
+                    bank="SBI",
+                    source="credit_card_pdf",
+                ))
 
         # Pattern: DD Mon YY DESCRIPTION AMOUNT D/C/M
         # e.g.: 31 Jan 26 STATEMENT DB - RP FORFEIT FOR CBK OFFER 56.00 D
