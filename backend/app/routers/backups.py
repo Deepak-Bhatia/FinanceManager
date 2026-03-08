@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Body
+from typing import List
 from pathlib import Path
 import shutil
 import datetime
@@ -103,7 +104,13 @@ def restore_backup(name: str):
 
 
 @router.post("/clean")
-def clean_data():
+def clean_data(entities: List[str] = Body(default=None)):
+    # entities: list of entity keys to delete (e.g. ['transactions','emi','audit_logs','categories'])
+    # If not provided, default to ['transactions'] for safety
+    if not entities:
+        entities = ["transactions"]
+    # normalize
+    entities = [str(e).strip() for e in entities if e]
     # create backup first
     src = _db_path()
     if src.exists():
@@ -126,31 +133,52 @@ def clean_data():
         try:
             conn = sqlite3.connect(str(src))
             cur = conn.cursor()
-            tables = [
-                'transactions', 'emi_details', 'ingestion_logs', 'audit_logs',
-                'accounts', 'categorization_rules', 'categories'
-            ]
+            # map allowed entity keys to actual table names (explicit whitelist)
+            allowed = {
+                'transactions': 'transactions',
+                'emi': 'emi_details',
+                'emi_details': 'emi_details',
+                'audit': 'audit_logs',
+                'audit_logs': 'audit_logs',
+                'categories': 'categories',
+                'category': 'categories'
+            }
+            tables = []
+            for e in entities:
+                k = e.lower()
+                if k in allowed and allowed[k] not in tables:
+                    tables.append(allowed[k])
+            # Defensive: if no recognized tables, abort
+            if len(tables) == 0:
+                raise HTTPException(status_code=400, detail="No valid entity types provided for cleaning")
+            # Audit the requested clean BEFORE performing deletes
+            try:
+                db = SessionLocal()
+                db.add(AuditLog(
+                    event_type="clean_requested",
+                    summary=f"Requested clean for entities: {entities}",
+                    details=json.dumps({"entities_requested": entities, "tables_to_delete": tables})
+                ))
+                db.commit()
+            except Exception:
+                pass
             deleted = []
             for t in tables:
                 try:
+                    # Only allow simple table names from the whitelist
                     cur.execute(f"DELETE FROM {t};")
                     deleted.append(t)
                 except Exception:
                     pass
             conn.commit()
             conn.close()
-            # re-seed categories if needed
-            try:
-                init_db()
-            except Exception:
-                pass
             # audit clean
             try:
                 db = SessionLocal()
                 db.add(AuditLog(
                     event_type="clean",
                     summary=f"Cleaned database, backed up {bname}",
-                    details=json.dumps({"backed_up": bname, "deleted_tables": deleted})
+                    details=json.dumps({"backed_up": bname, "deleted_tables": deleted, "entities_requested": entities})
                 ))
                 db.commit()
             except Exception:

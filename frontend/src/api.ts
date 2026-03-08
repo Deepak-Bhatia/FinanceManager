@@ -50,4 +50,4 @@ export const getAuditLogs = (params: Record<string, any>) =>
 export const listBackups = () => api.get('/backup/list').then(r => r.data);
 export const createBackup = () => api.post('/backup/create').then(r => r.data);
 export const restoreBackup = (name: string) => api.post(`/backup/restore/${encodeURIComponent(name)}`).then(r => r.data);
-export const cleanData = () => api.post('/backup/clean').then(r => r.data);
+export const cleanData = (entities?: string[]) => api.post('/backup/clean', entities ? entities : undefined).then(r => r.data);
