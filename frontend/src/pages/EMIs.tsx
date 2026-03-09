@@ -32,6 +32,16 @@ type Installment = {
 
 function parseBookingMonth(s: string): { month: number; year: number } | null {
   if (!s) return null;
+
+  // Handle DD/MM/YYYY or DD/MM/YY (e.g. "23/02/2026", "23-02-26")
+  const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (dmy) {
+    let yr = parseInt(dmy[3]);
+    if (yr < 100) yr += 2000;
+    return { month: parseInt(dmy[2]) - 1, year: yr };
+  }
+
+  // Handle "Feb.'26", "Feb 2026", "Feb-26", "February 2026" etc.
   const mo_map: Record<string, number> = {
     jan:0, feb:1, mar:2, apr:3, may:4, jun:5,
     jul:6, aug:7, sep:8, oct:9, nov:10, dec:11,

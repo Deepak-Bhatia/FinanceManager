@@ -152,7 +152,11 @@ export default function TransactionGrid({
     setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   };
 
-  // EMI count — based on all items in current filter (full page), not just visible slice
+  // Set of transaction IDs that have at least one EMI attachment
+  const emiLinkedIds = useMemo(
+    () => new Set(attachments.map((a: any) => a.transaction_id)),
+    [attachments]
+  );
   const allItemIds = useMemo(() => new Set(items.map(t => t.id)), [items]);
   const relevantAttachments = useMemo(
     () => attachments.filter(a => allItemIds.has(a.transaction_id)),
@@ -260,10 +264,17 @@ export default function TransactionGrid({
               const isIgnored = ((t.tags || '') as string).toLowerCase().split(',').map(s => s.trim()).includes('ignore');
               const cat = catMap[t.category_id];
               const isSelected = selectedIds.has(t.id);
+              const isEmi = emiLinkedIds.has(t.id);
               return (
                 <tr key={t.id}
-                  className={`border-b border-[var(--border)] transition-colors ${isIgnored ? 'opacity-50' : ''} ${isSelected ? 'bg-blue-50/30' : 'hover:bg-[var(--bg-primary)]'}`}
-                  title={isIgnored ? 'Ignored transaction — excluded from calculations' : undefined}
+                  className={`border-b border-[var(--border)] transition-colors ${isIgnored ? 'opacity-50' : ''} ${
+                    isSelected
+                      ? 'bg-blue-50/30'
+                      : isEmi
+                        ? 'bg-amber-500/10 hover:bg-amber-500/15'
+                        : 'hover:bg-[var(--bg-primary)]'
+                  }`}
+                  title={isIgnored ? 'Ignored transaction — excluded from calculations' : isEmi ? 'Linked to an EMI' : undefined}
                 >
                   <td className="px-3 py-3">
                     <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(t.id)}
