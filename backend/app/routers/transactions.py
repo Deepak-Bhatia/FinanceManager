@@ -13,6 +13,7 @@ from app.models.transaction import compute_transaction_hash
 from app.models.account import Account
 from app.models.audit_log import AuditLog
 from app.models.category import Category
+from app.models.emi_attachment import EmiAttachment
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
@@ -99,7 +100,7 @@ def list_transactions(
 
 @router.get("/{txn_id}")
 def get_transaction(txn_id: int, db: Session = Depends(get_db)):
-    txn = db.query(Transaction).get(txn_id)
+    txn = db.get(Transaction, txn_id)
     if not txn:
         raise HTTPException(404, "Transaction not found")
     return _serialize(txn)
@@ -144,7 +145,7 @@ def create_transaction(body: TransactionCreate, db: Session = Depends(get_db)):
 
 @router.patch("/{txn_id}")
 def update_transaction(txn_id: int, body: TransactionUpdate, db: Session = Depends(get_db)):
-    txn = db.query(Transaction).get(txn_id)
+    txn = db.get(Transaction, txn_id)
     if not txn:
         raise HTTPException(404, "Transaction not found")
 
@@ -159,8 +160,8 @@ def update_transaction(txn_id: int, body: TransactionUpdate, db: Session = Depen
             old_val = getattr(meta, field) if meta else None
             if old_val != val:
                 if field == "category_id":
-                    old_cat = db.query(Category).get(old_val) if old_val else None
-                    new_cat = db.query(Category).get(val) if val else None
+                    old_cat = db.get(Category, old_val) if old_val else None
+                    new_cat = db.get(Category, val) if val else None
                     old_name = old_cat.name if old_cat else "Uncategorized"
                     new_name = new_cat.name if new_cat else "Uncategorized"
                     db.add(AuditLog(
@@ -213,9 +214,11 @@ def update_transaction(txn_id: int, body: TransactionUpdate, db: Session = Depen
 
 @router.delete("/{txn_id}")
 def delete_transaction(txn_id: int, db: Session = Depends(get_db)):
-    txn = db.query(Transaction).get(txn_id)
+    txn = db.get(Transaction, txn_id)
     if not txn:
         raise HTTPException(404, "Transaction not found")
+    db.query(EmiAttachment).filter(EmiAttachment.transaction_id == txn_id).delete()
+    db.query(TransactionMetadata).filter(TransactionMetadata.transaction_hash == txn.transaction_hash).delete()
     db.delete(txn)
     db.commit()
     return {"deleted": True}

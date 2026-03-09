@@ -372,6 +372,10 @@ class ICICIParser(BaseParser):
             if amount == 0:
                 continue
 
+            # Skip Merchant EMI conversion lines — these are internal EMI bookings, not real transactions
+            if re.search(r'merchant\s+emi\s+conversion', desc, re.IGNORECASE):
+                continue
+
             txn_type = "credit" if is_credit else "debit"
             transactions.append(ParsedTransaction(
                 date=dt, description=desc, amount=amount,
