@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getCategories, updateTransaction, deleteTransaction } from '../api';
+import { getCategories, updateTransaction, deleteTransaction, getEmis, getEmiAttachments, createEmiAttachments, getCreditCardCycles } from '../api';
 import TransactionGrid from './TransactionGrid';
 import ConfirmModal from './ConfirmModal';
 
@@ -11,8 +11,16 @@ export default function CreditCardTransactionsGrid({ cycle, accountId }: { cycle
   const [editCatId, setEditCatId] = useState<number | null>(null);
   const [editTags, setEditTags] = useState<string>('');
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const [emis, setEmis] = useState<any[]>([]);
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [cycles, setCycles] = useState<string[]>([]);
 
   useEffect(() => { getCategories().then(setCategories); }, []);
+  useEffect(() => {
+    getEmis().then((d: any) => setEmis(d.emis || []));
+    getEmiAttachments().then(setAttachments);
+    getCreditCardCycles().then(data => setCycles(data.map((d: any) => d.cycle)));
+  }, []);
   useEffect(() => {
     if (!cycle) return;
     setLoading(true);
@@ -56,6 +64,12 @@ export default function CreditCardTransactionsGrid({ cycle, accountId }: { cycle
 
   const handleDelete = (txnId: number) => setPendingDeleteId(txnId);
 
+  const handleAttach = async (transactionIds: number[], emiId: number, emiCycle: string) => {
+    await createEmiAttachments({ emi_id: emiId, cycle: emiCycle, transaction_ids: transactionIds });
+    const updated = await getEmiAttachments();
+    setAttachments(updated);
+  };
+
   const confirmDelete = async () => {
     if (pendingDeleteId === null) return;
     await deleteTransaction(pendingDeleteId);
@@ -85,6 +99,10 @@ export default function CreditCardTransactionsGrid({ cycle, accountId }: { cycle
           onEditTagsChange={setEditTags}
           onDelete={handleDelete}
           showActions={true}
+          emis={emis}
+          attachments={attachments}
+          cycles={cycles}
+          onAttach={handleAttach}
         />
       </div>
 

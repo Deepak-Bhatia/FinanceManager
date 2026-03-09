@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getTransactions, getCategories, updateTransaction, deleteTransaction } from '../api';
+import { getTransactions, getCategories, updateTransaction, deleteTransaction, getEmis, getEmiAttachments, createEmiAttachments, getCreditCardCycles } from '../api';
 import TransactionGrid from '../components/TransactionGrid';
 import ConfirmModal from '../components/ConfirmModal';
 import { Search, X } from 'lucide-react';
@@ -28,6 +28,9 @@ export default function Transactions() {
   const [editTags, setEditTags] = useState<string>('');
   const [page, setPage] = useState(1);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const [emis, setEmis] = useState<any[]>([]);
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [cycles, setCycles] = useState<string[]>([]);
   const [filters, setFilters] = useState({
     month: '',
     year: String(CUR_YEAR),
@@ -38,6 +41,12 @@ export default function Transactions() {
   });
 
   useEffect(() => { getCategories().then(setCategories); }, []);
+
+  useEffect(() => {
+    getEmis().then((d: any) => setEmis(d.emis || []));
+    getEmiAttachments().then(setAttachments);
+    getCreditCardCycles().then(data => setCycles(data.map((d: any) => d.cycle)));
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -91,6 +100,13 @@ export default function Transactions() {
   };
 
   const handleDelete = (id: number) => setPendingDeleteId(id);
+
+  const handleAttach = async (transactionIds: number[], emiId: number, cycle: string) => {
+    await createEmiAttachments({ emi_id: emiId, cycle, transaction_ids: transactionIds });
+    // Refresh attachments list
+    const updated = await getEmiAttachments();
+    setAttachments(updated);
+  };
   const confirmDelete = async () => {
     if (pendingDeleteId === null) return;
     await deleteTransaction(pendingDeleteId);
@@ -195,6 +211,10 @@ export default function Transactions() {
         sortKey={sortKey}
         onSortChange={(key) => setSortKey(key as SortKey)}
         showActions={true}
+        emis={emis}
+        attachments={attachments}
+        cycles={cycles}
+        onAttach={handleAttach}
       />
 
       {/* Pagination */}

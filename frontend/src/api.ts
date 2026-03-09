@@ -43,6 +43,11 @@ export const getCreditCardAnalytics = (params: { cycle: string; account_id?: num
 
 // EMIs
 export const getEmis = () => api.get('/emis').then(r => r.data);
+export const updateEmi = (id: number, data: Record<string, any>) => api.patch(`/emis/${id}`, data).then(r => r.data);
+export const getEmiAttachments = () => api.get('/emis/attachments').then(r => r.data);
+export const createEmiAttachments = (data: { emi_id: number; cycle: string; transaction_ids: number[] }) =>
+  api.post('/emis/attachments', data).then(r => r.data);
+export const deleteEmiAttachment = (id: number) => api.delete(`/emis/attachments/${id}`).then(r => r.data);
 
 // Card Details
 export const getCardDetails = () => api.get('/cards').then(r => r.data);
