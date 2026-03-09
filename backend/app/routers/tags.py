@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.transaction_metadata import TransactionMetadata
+from app.services.auto_tagger import run_auto_tag
 
 router = APIRouter(prefix="/api/tags", tags=["tags"])
 
@@ -53,6 +54,13 @@ def list_tags(db: Session = Depends(get_db)):
         {"name": name, "type": tag_types[name], "count": tag_counts[name]}
         for name in sorted(tag_counts.keys(), key=lambda n: tag_counts[n], reverse=True)
     ]
+    return result
+
+
+@router.post("/auto-tag")
+def auto_tag_transactions(db: Session = Depends(get_db)):
+    """Run keyword-based auto-tagging across all transactions."""
+    result = run_auto_tag(db)
     return result
 
 
