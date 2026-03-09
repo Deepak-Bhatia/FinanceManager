@@ -628,6 +628,95 @@ class HSBCParser(BaseParser):
         return transactions
 
 
+    def parse_emi_details(self, filepath: str) -> List[ParsedEmiDetail]:
+        """Extract EMI details from the Loan Summary Table in HSBC statements."""
+        emi_details = []
+
+        with pdfplumber.open(filepath) as pdf:
+            for page in pdf.pages:
+                tables = page.extract_tables()
+                for table in tables:
+                    if not table or len(table) < 3:
+                        continue
+                    # Detect HSBC Loan Summary Table by first cell
+                    if not (table[0] and table[0][0] and "Loan Summary Table" in str(table[0][0])):
+                        continue
+                    # Row 0: title, Row 1: column headers, Row 2+: data
+                    for row in table[2:]:
+                        if not row or not row[0]:
+                            continue
+                        try:
+                            emi = self._parse_hsbc_emi_row(row)
+                            if emi:
+                                emi_details.append(emi)
+                        except Exception:
+                            continue
+        return emi_details
+
+    def _parse_hsbc_emi_row(self, row: list) -> "ParsedEmiDetail | None":
+        """Parse a single row from the HSBC Loan Summary Table.
+        Columns: Merchant Name | Loan Booking Date | Principal | Interest |
+                 Installment amount | Tenure
+        """
+        merchant_name = str(row[0]).replace("\n", " ").strip()
+        if not merchant_name:
+            return None
+
+        booking_date_str = str(row[1]).strip() if len(row) > 1 and row[1] else ""
+        principal = self._clean_amount(str(row[2])) if len(row) > 2 and row[2] else 0.0
+        interest = self._clean_amount(str(row[3])) if len(row) > 3 and row[3] else 0.0
+        monthly_emi = self._clean_amount(str(row[4])) if len(row) > 4 and row[4] else 0.0
+        tenure_str = str(row[5]).strip() if len(row) > 5 and row[5] else ""
+
+        # Parse tenure "2/6" → current_installment=2, total=6
+        tenure_match = re.match(r"(\d+)/(\d+)", tenure_str)
+        if not tenure_match:
+            return None
+        current_installment = int(tenure_match.group(1))
+        total_installments = int(tenure_match.group(2))
+        pending = total_installments - current_installment
+
+        # Parse booking date "20 JAN 2026" → "Jan 2026"
+        months_map = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+                      "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
+        month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        booking_month = booking_date_str
+        loan_expiry = ""
+        date_match = re.match(
+            r"\d{1,2}\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{4})",
+            booking_date_str, re.IGNORECASE,
+        )
+        if date_match:
+            mon_num = months_map[date_match.group(1).upper()]
+            yr_num = int(date_match.group(2))
+            booking_month = f"{month_names[mon_num - 1]} {yr_num}"
+            # Expiry = booking month + total duration
+            expiry_mon = (mon_num - 1 + total_installments) % 12 + 1
+            expiry_yr = yr_num + (mon_num - 1 + total_installments) // 12
+            loan_expiry = f"{month_names[expiry_mon - 1]} {str(expiry_yr)[2:]}"
+
+        # Per-month principal and interest components
+        principal_component = round(principal / total_installments, 2) if total_installments else None
+        interest_component = round(interest / total_installments, 2) if total_installments else None
+        total_outstanding = round(pending * monthly_emi, 2)
+
+        return ParsedEmiDetail(
+            account_name="HSBC Platinum Card",
+            bank="HSBC",
+            product_name=merchant_name,
+            duration_months=total_installments,
+            booking_month=booking_month,
+            loan_expiry=loan_expiry,
+            total_outstanding=total_outstanding,
+            monthly_emi=monthly_emi,
+            principal_component=principal_component,
+            interest_component=interest_component,
+            loan_amount=principal + interest,
+            pending_installments=pending,
+        )
+
+
 class SBIParser(BaseParser):
     """Parser for SBI credit card statements."""
 
