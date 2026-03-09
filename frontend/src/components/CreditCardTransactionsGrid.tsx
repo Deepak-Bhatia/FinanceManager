@@ -103,6 +103,8 @@ export default function CreditCardTransactionsGrid({ cycle, accountId }: { cycle
           attachments={attachments}
           cycles={cycles}
           onAttach={handleAttach}
+          initialShowTop={true}
+          initialShowRecent={false}
         />
       </div>
 

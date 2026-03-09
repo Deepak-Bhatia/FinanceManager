@@ -131,10 +131,10 @@ export default function TransactionGrid({
   }
   if (showRecent && !showTop) filtered = filtered.slice(0, 20);
   else if (showTop && !showRecent) {
-    const spends = filtered.filter(t => (t.type || '').toLowerCase() !== 'credit');
+    const spends = filtered.filter(t => (t.type || '').toLowerCase() !== 'credit' && !(t.tags || '').split(',').map((s: string) => s.trim().toLowerCase()).includes('ignore'));
     filtered = [...spends].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)).slice(0, 20);
   } else if (showRecent && showTop) {
-    const recent = filtered.slice(0, 20).filter(t => (t.type || '').toLowerCase() !== 'credit');
+    const recent = filtered.slice(0, 20).filter(t => (t.type || '').toLowerCase() !== 'credit' && !(t.tags || '').split(',').map((s: string) => s.trim().toLowerCase()).includes('ignore'));
     filtered = [...recent].sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)).slice(0, 20);
   }
 
