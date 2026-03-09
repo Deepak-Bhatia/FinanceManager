@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { LayoutDashboard, Receipt, FolderUp, Tags, CreditCard, CalendarClock, Wallet, ClipboardList, Tag } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
@@ -11,6 +12,16 @@ import Audit from './pages/Audit';
 import TagsPage from './pages/Tags';
 
 function App() {
+  const [open, setOpen] = useState(() => localStorage.getItem('sidebarOpen') === 'true');
+
+  const toggle = () => {
+    setOpen(prev => {
+      const next = !prev;
+      localStorage.setItem('sidebarOpen', String(next));
+      return next;
+    });
+  };
+
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/creditcards', icon: CreditCard, label: 'Credit Cards' },
@@ -26,19 +37,30 @@ function App() {
   return (
     <BrowserRouter>
       <div className="flex h-screen">
-        {/* Sidebar — collapsed icon-only */}
-        <aside className="w-14 bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col">
-          <div className="h-14 flex items-center justify-center border-b border-[var(--border)]" title="FinanceManager">
-            <span className="text-xl">💰</span>
+        {/* Sidebar — click blank area to toggle */}
+        <aside
+          onClick={toggle}
+          className={`${open ? 'w-48' : 'w-14'} transition-all duration-200 bg-[var(--bg-secondary)] border-r border-[var(--border)] flex flex-col cursor-pointer select-none shrink-0`}
+          title={open ? 'Click to collapse' : 'Click to expand'}
+        >
+          {/* Logo */}
+          <div className="h-14 flex items-center border-b border-[var(--border)] shrink-0 overflow-hidden px-4 gap-3">
+            <span className="text-xl shrink-0">💰</span>
+            {open && <span className="text-sm font-semibold text-[var(--text-primary)] whitespace-nowrap">Finance Manager</span>}
           </div>
-          <nav className="flex-1 py-2 flex flex-col items-center gap-1">
+
+          {/* Nav items */}
+          <nav className="flex-1 py-2 flex flex-col gap-1 overflow-hidden">
             {navItems.map(({ to, icon: Icon, label }) => (
               <NavLink
                 key={to}
                 to={to}
-                title={label}
+                title={open ? undefined : label}
+                onClick={e => e.stopPropagation()}
                 className={({ isActive }) =>
-                  `w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
+                  `flex items-center gap-3 rounded-lg transition-colors mx-2 ${
+                    open ? 'px-3 py-2' : 'w-10 h-10 justify-center mx-auto'
+                  } ${
                     isActive
                       ? 'bg-[var(--accent)] text-white'
                       : 'text-[var(--text-secondary)] hover:bg-[var(--border)] hover:text-[var(--text-primary)]'
@@ -46,7 +68,8 @@ function App() {
                 }
                 end={to === '/'}
               >
-                <Icon size={18} />
+                <Icon size={18} className="shrink-0" />
+                {open && <span className="text-sm whitespace-nowrap">{label}</span>}
               </NavLink>
             ))}
           </nav>
