@@ -297,7 +297,6 @@ export default function TransactionGrid({
                       />
                     ) : (
                       <div className="flex items-center gap-2 min-w-0">
-                        {cat?.icon && <span className="text-base flex-shrink-0">{cat.icon}</span>}
                         <span className="truncate">{t.custom_description || t.description}</span>
                       </div>
                     )}

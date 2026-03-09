@@ -184,6 +184,7 @@ def get_card_details(db: Session) -> Dict[str, Any]:
         cards.append({
             "id": a.id,
             "name": a.name,
+            "nickname": a.nickname,
             "bank": a.bank,
             "glyph": a.glyph,
             "network": meta.get("network", "Unknown"),

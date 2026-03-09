@@ -33,9 +33,10 @@ def cycles(db: Session = Depends(get_db)):
 def analytics(
     cycle: str = Query(...),
     account_id: Optional[int] = Query(None),
+    hide_ignored: bool = Query(True),
     db: Session = Depends(get_db),
 ):
-    return get_analytics(db, cycle, account_id)
+    return get_analytics(db, cycle, account_id, hide_ignored)
 
 
 # New endpoint: /api/creditcards/transactions
@@ -64,7 +65,7 @@ def credit_card_transactions(
         cat_lookup = {c.id: c.name for c in cats}
     if acct_ids:
         accts = db.query(Account).filter(Account.id.in_(acct_ids)).all()
-        acct_lookup = {a.id: {"name": a.name, "glyph": a.glyph} for a in accts}
+        acct_lookup = {a.id: {"name": a.nickname or a.name, "glyph": a.glyph} for a in accts}
 
     items = [
         {

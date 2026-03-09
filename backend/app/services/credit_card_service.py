@@ -26,7 +26,7 @@ def _is_emi(description: str) -> bool:
 def get_credit_card_accounts(db: Session) -> List[Dict[str, Any]]:
     """List all credit card accounts."""
     accounts = db.query(Account).filter(Account.type == "credit_card").all()
-    return [{"id": a.id, "name": a.name, "bank": a.bank, "glyph": a.glyph} for a in accounts]
+    return [{"id": a.id, "name": a.name, "bank": a.bank, "glyph": a.glyph, "nickname": a.nickname} for a in accounts]
 
 
 def get_available_billing_cycles(db: Session) -> List[Dict[str, Any]]:
@@ -45,6 +45,7 @@ def get_analytics(
     db: Session,
     cycle: str,
     account_id: Optional[int] = None,
+    hide_ignored: bool = True,
 ) -> Dict[str, Any]:
     """Compute all credit card analytics for a billing cycle."""
     # Base query: credit card transactions for this cycle
@@ -56,9 +57,10 @@ def get_analytics(
         base = base.filter(Transaction.account_id == account_id)
 
     # Exclude transactions tagged as 'ignore' (case-insensitive)
-    base = base.outerjoin(TransactionMetadata, Transaction.transaction_hash == TransactionMetadata.transaction_hash).filter(
-        or_(TransactionMetadata.tags == None, ~func.lower(TransactionMetadata.tags).like('%ignore%'))
-    )
+    if hide_ignored:
+        base = base.outerjoin(TransactionMetadata, Transaction.transaction_hash == TransactionMetadata.transaction_hash).filter(
+            or_(TransactionMetadata.tags == None, ~func.lower(TransactionMetadata.tags).like('%ignore%'))
+        )
 
     all_txns = base.all()
     debits = [t for t in all_txns if t.type == "debit"]
@@ -107,13 +109,13 @@ def get_analytics(
     acct_lookup = {}
     if acct_ids:
         accts = db.query(Account).filter(Account.id.in_(acct_ids)).all()
-        acct_lookup = {a.id: {"name": a.name, "bank": a.bank} for a in accts}
+        acct_lookup = {a.id: {"name": a.name, "bank": a.bank, "nickname": a.nickname} for a in accts}
 
     by_card = []
     for aid, data in card_map.items():
-        info = acct_lookup.get(aid, {"name": "Unknown", "bank": "Unknown"})
+        info = acct_lookup.get(aid, {"name": "Unknown", "bank": "Unknown", "nickname": None})
         by_card.append({
-            "card": info["name"],
+            "card": info["nickname"] or info["name"],
             "bank": info["bank"],
             "total": round(data["total"], 2),
             "count": data["count"],
@@ -148,7 +150,7 @@ def get_analytics(
     acct_lookup_all = {}
     if acct_ids_all:
         accts = db.query(Account).filter(Account.id.in_(acct_ids_all)).all()
-        acct_lookup_all = {a.id: a.name for a in accts}
+        acct_lookup_all = {a.id: (a.nickname or a.name) for a in accts}
     cat_ids_all = list({(t.metadata_record.category_id if t.metadata_record else None) for t in all_sorted if (t.metadata_record and t.metadata_record.category_id)})
     cat_lookup_all = {}
     if cat_ids_all:

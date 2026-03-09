@@ -38,7 +38,7 @@ export const recategorize = () => api.post('/categories/recategorize').then(r =>
 // Credit Cards
 export const getCreditCardAccounts = () => api.get('/creditcards/accounts').then(r => r.data);
 export const getCreditCardCycles = () => api.get('/creditcards/cycles').then(r => r.data);
-export const getCreditCardAnalytics = (params: { cycle: string; account_id?: number }) =>
+export const getCreditCardAnalytics = (params: { cycle: string; account_id?: number; hide_ignored?: boolean }) =>
   api.get('/creditcards/analytics', { params }).then(r => r.data);
 
 // EMIs
@@ -58,7 +58,7 @@ export const getAuditLogs = (params: Record<string, any>) =>
   api.get('/audit', { params }).then(r => r.data);
 
 // Accounts
-export const patchAccount = (id: number, data: { glyph?: string }) =>
+export const patchAccount = (id: number, data: { glyph?: string; nickname?: string }) =>
   api.patch(`/accounts/${id}`, data).then(r => r.data);
 
 // Tags

@@ -37,6 +37,7 @@ def init_db():
     with engine.connect() as conn:
         for ddl in [
             "ALTER TABLE accounts ADD COLUMN glyph TEXT",
+            "ALTER TABLE accounts ADD COLUMN nickname TEXT",
             "ALTER TABLE transaction_metadata ADD COLUMN tags_meta TEXT",
         ]:
             try:
