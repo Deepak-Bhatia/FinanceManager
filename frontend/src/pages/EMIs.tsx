@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getEmis, updateEmi, getEmiAttachments } from '../api';
-import { ChevronDown, ChevronRight, CreditCard, IndianRupee, Clock, Wallet, Pencil, X } from 'lucide-react';
+import { getEmis, updateEmi, deleteEmi, getEmiAttachments } from '../api';
+import { ChevronDown, ChevronRight, CreditCard, IndianRupee, Clock, Wallet, Pencil, Trash2, X } from 'lucide-react';
 
 const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
@@ -21,6 +21,7 @@ type Emi = {
   loan_amount: number | null;
   pending_installments: number | null;
   source_file: string | null;
+  custom_description: string | null;
 };
 
 type Installment = {
@@ -87,6 +88,7 @@ const EMPTY_FORM = {
   product_name: '', duration_months: '', booking_month: '', loan_expiry: '',
   monthly_emi: '', total_outstanding: '', loan_amount: '',
   principal_component: '', interest_component: '', pending_installments: '',
+  custom_description: '',
 };
 
 export default function EMIs() {
@@ -97,6 +99,7 @@ export default function EMIs() {
   const [editingEmi, setEditingEmi] = useState<Emi | null>(null);
   const [editForm, setEditForm] = useState<typeof EMPTY_FORM>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   useEffect(() => {
     getEmis().then(setData).finally(() => setLoading(false));
@@ -125,6 +128,7 @@ export default function EMIs() {
       principal_component: emi.principal_component != null ? String(emi.principal_component) : '',
       interest_component: emi.interest_component != null ? String(emi.interest_component) : '',
       pending_installments: emi.pending_installments != null ? String(emi.pending_installments) : '',
+      custom_description: emi.custom_description || '',
     });
   };
 
@@ -141,6 +145,7 @@ export default function EMIs() {
     payload.principal_component = editForm.principal_component !== '' ? Number(editForm.principal_component) : null;
     payload.interest_component = editForm.interest_component !== '' ? Number(editForm.interest_component) : null;
     payload.pending_installments = editForm.pending_installments !== '' ? Number(editForm.pending_installments) : null;
+    payload.custom_description = editForm.custom_description.trim() || null;
     try {
       const updated = await updateEmi(editingEmi.id, payload);
       setData((prev: any) => ({
@@ -155,6 +160,15 @@ export default function EMIs() {
 
   const field = (key: keyof typeof EMPTY_FORM, val: string) =>
     setEditForm(prev => ({ ...prev, [key]: val }));
+
+  const handleDelete = async (emiId: number) => {
+    await deleteEmi(emiId);
+    setData((prev: any) => ({
+      ...prev,
+      emis: prev.emis.filter((e: Emi) => e.id !== emiId),
+    }));
+    setConfirmDeleteId(null);
+  };
 
   if (loading) return <p className="text-[var(--text-secondary)]">Loading…</p>;
   if (!data || data.emis.length === 0) {
@@ -199,7 +213,10 @@ export default function EMIs() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium truncate">{emi.product_name}</span>
+                      <span className="font-medium truncate">{emi.custom_description || emi.product_name}</span>
+                      {emi.custom_description && (
+                        <span className="text-xs text-[var(--text-secondary)] truncate">({emi.product_name})</span>
+                      )}
                       <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400">
                         {emi.duration_months} months
                       </span>
@@ -225,6 +242,29 @@ export default function EMIs() {
                     title="Edit EMI">
                     <Pencil size={14} />
                   </button>
+                  {confirmDeleteId === emi.id ? (
+                    <>
+                      <button
+                        onClick={e => { e.stopPropagation(); setConfirmDeleteId(null); }}
+                        className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                        title="Cancel">
+                        <X size={14} />
+                      </button>
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDelete(emi.id); }}
+                        className="p-1.5 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                        title="Confirm delete">
+                        <Trash2 size={14} />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={e => { e.stopPropagation(); setConfirmDeleteId(emi.id); }}
+                      className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                      title="Delete EMI">
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -361,6 +401,12 @@ export default function EMIs() {
                   <input type="text" value={editForm.product_name} onChange={e => field('product_name', e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg bg-[var(--bg-primary)]"
                     placeholder="e.g. MERCHANT EMI" autoFocus />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Custom Description <span className="font-normal opacity-60">(shown instead of product name)</span></label>
+                  <input type="text" value={editForm.custom_description} onChange={e => field('custom_description', e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-[var(--border)] rounded-lg bg-[var(--bg-primary)]"
+                    placeholder="e.g. Apple iPhone 16 Pro EMI" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Duration (months)</label>

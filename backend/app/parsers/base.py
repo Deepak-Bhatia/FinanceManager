@@ -53,11 +53,13 @@ class BaseParser(ABC):
         pass
 
     def _clean_amount(self, amount_str: str) -> float:
-        """Clean amount string like '1,300.00' or '61.34' to float."""
+        """Clean amount string like '1,300.00' or '61.34' to float. Strips trailing non-numeric chars."""
         cleaned = amount_str.replace(",", "").replace("`", "").replace("₹", "").strip()
-        # Remove any trailing alphabetic chars like 'Dr', 'Cr' etc.
-        cleaned = cleaned.split()[0] if " " in cleaned else cleaned
+        # Remove any trailing non-numeric, non-dot chars
+        import re
+        cleaned = re.match(r"([\d\.]+)", cleaned)
+        cleaned = cleaned.group(1) if cleaned else "0"
         try:
             return abs(float(cleaned))
-        except ValueError:
+        except Exception:
             return 0.0

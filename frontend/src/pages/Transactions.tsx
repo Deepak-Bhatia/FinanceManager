@@ -26,6 +26,7 @@ export default function Transactions() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editCatId, setEditCatId] = useState<number | null>(null);
   const [editTags, setEditTags] = useState<string>('');
+  const [editCustomDesc, setEditCustomDesc] = useState<string>('');
   const [page, setPage] = useState(1);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [emis, setEmis] = useState<any[]>([]);
@@ -76,27 +77,28 @@ export default function Transactions() {
     setEditingId(t.id);
     setEditCatId(t.category_id || null);
     setEditTags(t.tags || '');
+    setEditCustomDesc(t.custom_description || t.description || '');
   };
-  const cancelEditing = () => { setEditingId(null); setEditCatId(null); setEditTags(''); };
+  const cancelEditing = () => { setEditingId(null); setEditCatId(null); setEditTags(''); setEditCustomDesc(''); };
   const saveEditing = async () => {
     if (editingId === null) return;
-    // Preserve existing tag types, new tags default to "manual"
+    const txn = data.items.find((t: any) => t.id === editingId);
     const existingMeta: Record<string, string> = {};
-    (data.items.find((t: any) => t.id === editingId)?.tags_meta || []).forEach((m: any) => {
-      existingMeta[m.name] = m.type;
-    });
+    (txn?.tags_meta || []).forEach((m: any) => { existingMeta[m.name] = m.type; });
     const tagsList = editTags.split(',').map((t: string) => t.trim()).filter(Boolean);
     const newTagsMeta = JSON.stringify(tagsList.map(name => ({ name, type: existingMeta[name] || 'manual' })));
-    await updateTransaction(editingId, { category_id: editCatId, tags: editTags, tags_meta: newTagsMeta });
+    // Only save custom_description if it differs from the original description
+    const customDesc = editCustomDesc.trim() === (txn?.description || '').trim() ? null : editCustomDesc.trim() || null;
+    await updateTransaction(editingId, { category_id: editCatId, tags: editTags, tags_meta: newTagsMeta, custom_description: customDesc });
     setData((prev: any) => ({
       ...prev,
       items: prev.items.map((t: any) =>
         t.id === editingId
-          ? { ...t, category_id: editCatId, tags: editTags, tags_meta: JSON.parse(newTagsMeta) }
+          ? { ...t, category_id: editCatId, tags: editTags, tags_meta: JSON.parse(newTagsMeta), custom_description: customDesc }
           : t
       ),
     }));
-    setEditingId(null); setEditCatId(null); setEditTags('');
+    setEditingId(null); setEditCatId(null); setEditTags(''); setEditCustomDesc('');
   };
 
   const handleDelete = (id: number) => setPendingDeleteId(id);
@@ -202,11 +204,13 @@ export default function Transactions() {
         editingId={editingId}
         editCatId={editCatId}
         editTags={editTags}
+        editCustomDesc={editCustomDesc}
         onEditStart={startEditing}
         onEditCancel={cancelEditing}
         onEditSave={saveEditing}
         onEditCatChange={setEditCatId}
         onEditTagsChange={setEditTags}
+        onEditCustomDescChange={setEditCustomDesc}
         onDelete={handleDelete}
         sortKey={sortKey}
         onSortChange={(key) => setSortKey(key as SortKey)}

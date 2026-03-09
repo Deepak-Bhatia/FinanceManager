@@ -47,11 +47,13 @@ export type TransactionGridProps = {
   editingId?: number | null;
   editCatId?: number | null;
   editTags?: string;
+  editCustomDesc?: string;
   onEditStart?: (txn: any) => void;
   onEditCancel?: () => void;
   onEditSave?: () => void;
   onEditCatChange?: (catId: number | null) => void;
   onEditTagsChange?: (tags: string) => void;
+  onEditCustomDescChange?: (val: string) => void;
   onDelete?: (txnId: number) => void;
   sortKey?: string | null;
   sortDir?: 'asc' | 'desc';
@@ -68,8 +70,8 @@ export type TransactionGridProps = {
 
 export default function TransactionGrid({
   items = [], categories = [], loading,
-  editingId, editCatId, editTags,
-  onEditStart, onEditCancel, onEditSave, onEditCatChange, onEditTagsChange,
+  editingId, editCatId, editTags, editCustomDesc,
+  onEditStart, onEditCancel, onEditSave, onEditCatChange, onEditTagsChange, onEditCustomDescChange,
   onDelete,
   sortKey: propSortKey, sortDir: propSortDir, onSortChange: propOnSortChange,
   showActions = true, initialShowRecent, initialShowTop,
@@ -110,6 +112,7 @@ export default function TransactionGrid({
     const s = search.trim().toLowerCase();
     filtered = filtered.filter(t =>
       (t.date && t.date.toLowerCase().includes(s)) ||
+      (t.custom_description && t.custom_description.toLowerCase().includes(s)) ||
       (t.description && t.description.toLowerCase().includes(s)) ||
       (t.amount && String(t.amount).toLowerCase().includes(s)) ||
       (t.type && t.type.toLowerCase().includes(s)) ||
@@ -281,11 +284,23 @@ export default function TransactionGrid({
                       className="cursor-pointer accent-[var(--accent)]" />
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">{t.date}</td>
-                  <td className="px-4 py-3 max-w-xs truncate" title={t.description}>
-                    <span className="inline-flex items-center gap-2">
-                      {cat?.icon && <span className="text-base flex-shrink-0">{cat.icon}</span>}
-                      <span className="truncate">{t.description}</span>
-                    </span>
+                  <td className="px-4 py-3 max-w-xs overflow-hidden" title={t.custom_description ? t.description : undefined}>
+                    {editingId === t.id ? (
+                      <input
+                        type="text"
+                        value={editCustomDesc ?? ''}
+                        onChange={e => onEditCustomDescChange?.(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') onEditSave?.(); if (e.key === 'Escape') onEditCancel?.(); }}
+                        autoFocus
+                        className="w-full px-2 py-1 text-sm border border-[var(--accent)] rounded bg-[var(--bg-primary)] outline-none"
+                        placeholder={t.description}
+                      />
+                    ) : (
+                      <div className="flex items-center gap-2 min-w-0">
+                        {cat?.icon && <span className="text-base flex-shrink-0">{cat.icon}</span>}
+                        <span className="truncate">{t.custom_description || t.description}</span>
+                      </div>
+                    )}
                   </td>
                   <td className={`px-4 py-3 font-medium whitespace-nowrap ${t.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
                     {t.type === 'credit' ? '+' : '-'}{fmt(t.amount)}

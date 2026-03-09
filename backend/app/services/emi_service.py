@@ -41,6 +41,7 @@ def get_all_emis(db: Session) -> Dict[str, Any]:
             "loan_amount": round(e.loan_amount, 2) if e.loan_amount else None,
             "pending_installments": e.pending_installments,
             "source_file": e.source_file,
+            "custom_description": e.custom_description,
         })
 
     total_monthly = sum(e["monthly_emi"] for e in emi_list)

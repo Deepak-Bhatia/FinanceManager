@@ -20,4 +20,5 @@ class EmiDetail(Base):
     loan_amount = Column(Float, nullable=True)  # total EMI/Loan amount
     pending_installments = Column(Integer, nullable=True)
     source_file = Column(String, nullable=True)
+    custom_description = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now())

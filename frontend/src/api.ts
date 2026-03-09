@@ -44,6 +44,7 @@ export const getCreditCardAnalytics = (params: { cycle: string; account_id?: num
 // EMIs
 export const getEmis = () => api.get('/emis').then(r => r.data);
 export const updateEmi = (id: number, data: Record<string, any>) => api.patch(`/emis/${id}`, data).then(r => r.data);
+export const deleteEmi = (id: number) => api.delete(`/emis/${id}`).then(r => r.data);
 export const getEmiAttachments = () => api.get('/emis/attachments').then(r => r.data);
 export const createEmiAttachments = (data: { emi_id: number; cycle: string; transaction_ids: number[] }) =>
   api.post('/emis/attachments', data).then(r => r.data);
@@ -62,7 +63,7 @@ export const patchAccount = (id: number, data: { glyph?: string }) =>
 
 // Tags
 export const getTags = () => api.get('/tags').then(r => r.data);
-export const patchTag = (name: string, data: { type: string }) =>
+export const patchTag = (name: string, data: { type?: string; color?: string | null }) =>
   api.patch(`/tags/${encodeURIComponent(name)}`, data).then(r => r.data);
 export const deleteTag = (name: string) =>
   api.delete(`/tags/${encodeURIComponent(name)}`).then(r => r.data);

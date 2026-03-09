@@ -1,9 +1,27 @@
-import { useEffect, useState } from 'react';
+import { CSSProperties, useEffect, useRef, useState } from 'react';
 import { getTags, patchTag, deleteTag, runAutoTag } from '../api';
 import ConfirmModal from '../components/ConfirmModal';
 
-type Tag = { name: string; type: 'manual' | 'auto'; count: number };
+type Tag = { name: string; type: 'manual' | 'auto'; count: number; color: string | null };
 type Filter = 'all' | 'manual' | 'auto';
+
+const PALETTE = [
+  '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899',
+  '#EF4444', '#F97316', '#F59E0B', '#84CC16',
+  '#10B981', '#14B8A6', '#06B6D4', '#64748B',
+];
+
+function tagStyle(tag: Tag): CSSProperties {
+  if (tag.color) return { backgroundColor: tag.color, color: '#fff' };
+  return {};
+}
+
+function tagCls(tag: Tag): string {
+  if (tag.color) return 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium';
+  return `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+    tag.type === 'auto' ? 'bg-purple-700/80 text-white' : 'bg-blue-700 text-white'
+  }`;
+}
 
 export default function TagsPage() {
   const [tags, setTags] = useState<Tag[]>([]);
@@ -14,6 +32,8 @@ export default function TagsPage() {
   const [savingType, setSavingType] = useState<string | null>(null);
   const [autoTagging, setAutoTagging] = useState(false);
   const [autoTagResult, setAutoTagResult] = useState<any | null>(null);
+  const [colorPickerTag, setColorPickerTag] = useState<string | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
   const load = () => {
     setLoading(true);
@@ -21,6 +41,18 @@ export default function TagsPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Close picker on outside click
+  useEffect(() => {
+    if (!colorPickerTag) return;
+    const handler = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setColorPickerTag(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [colorPickerTag]);
 
   const handleTypeChange = async (name: string, newType: 'manual' | 'auto') => {
     setSavingType(name);
@@ -31,6 +63,16 @@ export default function TagsPage() {
       load();
     } finally {
       setSavingType(null);
+    }
+  };
+
+  const handleColorChange = async (name: string, color: string | null) => {
+    setTags(prev => prev.map(t => t.name === name ? { ...t, color } : t));
+    setColorPickerTag(null);
+    try {
+      await patchTag(name, { color: color ?? '' });
+    } catch {
+      load();
     }
   };
 
@@ -47,7 +89,7 @@ export default function TagsPage() {
     try {
       const result = await runAutoTag();
       setAutoTagResult(result);
-      load(); // refresh tag list
+      load();
     } finally {
       setAutoTagging(false);
     }
@@ -153,6 +195,7 @@ export default function TagsPage() {
           <thead>
             <tr className="border-b border-[var(--border)] text-[var(--text-secondary)] text-left">
               <th className="px-5 py-3">Tag</th>
+              <th className="px-5 py-3">Colour</th>
               <th className="px-5 py-3">Type</th>
               <th className="px-5 py-3">Transactions</th>
               <th className="px-5 py-3 w-16"></th>
@@ -160,19 +203,78 @@ export default function TagsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={4} className="px-5 py-10 text-center text-[var(--text-secondary)]">Loading…</td></tr>
+              <tr><td colSpan={5} className="px-5 py-10 text-center text-[var(--text-secondary)]">Loading…</td></tr>
             ) : visible.length === 0 ? (
-              <tr><td colSpan={4} className="px-5 py-10 text-center text-[var(--text-secondary)]">No tags found</td></tr>
+              <tr><td colSpan={5} className="px-5 py-10 text-center text-[var(--text-secondary)]">No tags found</td></tr>
             ) : visible.map(tag => (
               <tr key={tag.name} className="border-b border-[var(--border)] hover:bg-[var(--bg-primary)] transition-colors">
+
+                {/* Tag badge */}
                 <td className="px-5 py-3">
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
-                    ${tag.type === 'auto' ? 'bg-purple-700/80 text-white' : 'bg-blue-700 text-white'}`}>
+                  <span className={tagCls(tag)} style={tagStyle(tag)}>
                     <span className="text-[10px] opacity-80">{tag.type === 'auto' ? '⚙' : '👤'}</span>
                     {tag.name}
                   </span>
                 </td>
 
+                {/* Colour picker cell */}
+                <td className="px-5 py-3">
+                  <div className="relative inline-block" ref={colorPickerTag === tag.name ? pickerRef : undefined}>
+                    <button
+                      onClick={() => setColorPickerTag(prev => prev === tag.name ? null : tag.name)}
+                      title="Customise colour"
+                      className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-[var(--border)] hover:bg-[var(--bg-secondary)] transition-colors text-xs text-[var(--text-secondary)]"
+                    >
+                      <span
+                        className="w-3.5 h-3.5 rounded-full border border-white/20 shrink-0"
+                        style={{ background: tag.color || (tag.type === 'auto' ? '#7c3aed' : '#1d4ed8') }}
+                      />
+                      {tag.color ? 'Custom' : 'Default'}
+                    </button>
+
+                    {/* Colour popover */}
+                    {colorPickerTag === tag.name && (
+                      <div className="absolute left-0 top-full mt-1.5 z-50 p-3 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-2xl w-52">
+                        {/* Preset palette */}
+                        <div className="grid grid-cols-6 gap-1.5 mb-3">
+                          {PALETTE.map(c => (
+                            <button
+                              key={c}
+                              onClick={() => handleColorChange(tag.name, c)}
+                              style={{ background: c }}
+                              className={`w-6 h-6 rounded-full transition-transform hover:scale-110 ${
+                                tag.color === c ? 'ring-2 ring-white ring-offset-1 ring-offset-[var(--bg-card)]' : ''
+                              }`}
+                              title={c}
+                            />
+                          ))}
+                        </div>
+
+                        {/* Custom hex input */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <input
+                            type="color"
+                            defaultValue={tag.color || '#3B82F6'}
+                            onChange={e => handleColorChange(tag.name, e.target.value)}
+                            className="w-7 h-7 rounded cursor-pointer border border-[var(--border)] bg-transparent p-0.5"
+                            title="Custom colour"
+                          />
+                          <span className="text-xs text-[var(--text-secondary)]">Custom colour</span>
+                        </div>
+
+                        {/* Set Default */}
+                        <button
+                          onClick={() => handleColorChange(tag.name, null)}
+                          className="w-full text-xs px-2 py-1.5 rounded-lg border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] transition-colors"
+                        >
+                          Set Default
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </td>
+
+                {/* Type selector */}
                 <td className="px-5 py-3">
                   <select
                     value={tag.type}

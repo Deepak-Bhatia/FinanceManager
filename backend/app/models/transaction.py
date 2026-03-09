@@ -32,6 +32,7 @@ class Transaction(Base):
     year = Column(Integer, nullable=False)
     is_recurring = Column(Boolean, default=False)
     notes = Column(String, nullable=True)
+    custom_description = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
     # relationship to metadata (one-to-one)

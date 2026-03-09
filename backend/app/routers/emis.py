@@ -92,6 +92,7 @@ class EmiUpdate(BaseModel):
     interest_component: Optional[float] = None
     loan_amount: Optional[float] = None
     pending_installments: Optional[int] = None
+    custom_description: Optional[str] = None
 
 
 def _serialize_emi(emi: EmiDetail, db: Session) -> dict:
@@ -115,7 +116,19 @@ def _serialize_emi(emi: EmiDetail, db: Session) -> dict:
         "loan_amount": round(emi.loan_amount, 2) if emi.loan_amount else None,
         "pending_installments": emi.pending_installments,
         "source_file": emi.source_file,
+        "custom_description": emi.custom_description,
     }
+
+
+@router.delete("/{emi_id}")
+def delete_emi(emi_id: int, db: Session = Depends(get_db)):
+    emi = db.get(EmiDetail, emi_id)
+    if not emi:
+        raise HTTPException(404, "EMI not found")
+    db.query(EmiAttachment).filter(EmiAttachment.emi_id == emi_id).delete()
+    db.delete(emi)
+    db.commit()
+    return {"ok": True}
 
 
 @router.patch("/{emi_id}")

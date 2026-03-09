@@ -27,6 +27,7 @@ class TransactionUpdate(BaseModel):
     tags: Optional[str] = None
     tags_meta: Optional[str] = None  # JSON: [{"name": "food", "type": "manual"|"auto"}]
     is_recurring: Optional[bool] = None
+    custom_description: Optional[str] = None
 
 
 class TransactionCreate(BaseModel):
@@ -249,5 +250,6 @@ def _serialize(t: Transaction, account_glyph: Optional[str] = None) -> dict:
         "tags": (t.metadata_record.tags if t.metadata_record else None),
         "tags_meta": tags_meta,
         "notes": t.notes,
+        "custom_description": t.custom_description,
         "created_at": t.created_at.isoformat() if t.created_at else None,
     }

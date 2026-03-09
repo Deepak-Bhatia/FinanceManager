@@ -484,57 +484,71 @@ class HDFCParser(BaseParser):
         pattern = re.compile(
             r"(\d{2}/\d{2}/\d{4})\|\s*\d{2}:\d{2}\s+"
             r"(.+?)\s+"
-            r"C\s*([\d,]+\.\d{2})",
+            r"C\s*([\d,]+\.\d{2})[^\d\n]*",
             re.IGNORECASE,
         )
         for m in pattern.finditer(full_text):
-            dt = datetime.strptime(m.group(1), "%d/%m/%Y").date()
-            desc = m.group(2).strip()
-            amount = self._clean_amount(m.group(3))
-
-            if amount == 0:
-                continue
-
-            # In HDFC: payment received / cashback lines are credits
-            is_credit = any(kw in desc.upper() for kw in [
-                "PAYMENT", "CASHBACK", "REVERSAL", "REFUND", "CREDIT",
-            ])
-            # Check if the line has a + sign before it (credit indicator in HDFC)
-            line_start = full_text.rfind("\n", 0, m.start())
-            line_text = full_text[line_start:m.end()]
-            if "+ C" in line_text or "Cr" in line_text:
-                is_credit = True
-
-            txn_type = "credit" if is_credit else "debit"
-            transactions.append(ParsedTransaction(
-                date=dt, description=desc, amount=amount,
-                type=txn_type, account_name=card_name,
-                bank="HDFC Bank", source="credit_card_pdf",
-            ))
-
-        # Also try the non-time format: DD/MM/YYYY DESCRIPTION C AMOUNT
-        if not transactions:
-            pattern2 = re.compile(
-                r"(\d{2}/\d{2}/\d{4})\s+"
-                r"(.+?)\s+"
-                r"C\s*([\d,]+\.\d{2})",
-                re.IGNORECASE,
-            )
-            for m in pattern2.finditer(full_text):
+            try:
                 dt = datetime.strptime(m.group(1), "%d/%m/%Y").date()
                 desc = m.group(2).strip()
                 amount = self._clean_amount(m.group(3))
+
                 if amount == 0:
                     continue
-                is_credit = any(kw in desc.upper() for kw in [
-                    "PAYMENT", "CASHBACK", "REVERSAL", "REFUND", "CREDIT",
-                ])
+
+                # ADJ prefix = debit adjustment (e.g. ADJ 10% Swiggy BLCK Cashback),
+                # regardless of whether the description contains "CASHBACK" etc.
+                if desc.upper().startswith("ADJ"):
+                    is_credit = False
+                else:
+                    # Explicit + or Cr marker in the line takes priority
+                    line_start = full_text.rfind("\n", 0, m.start())
+                    line_text = full_text[line_start:m.end()]
+                    if "+ C" in line_text or "Cr" in line_text:
+                        is_credit = True
+                    else:
+                        is_credit = any(kw in desc.upper() for kw in [
+                            "PAYMENT", "CASHBACK", "REFUND", "CREDIT",
+                        ])
+
                 txn_type = "credit" if is_credit else "debit"
                 transactions.append(ParsedTransaction(
                     date=dt, description=desc, amount=amount,
                     type=txn_type, account_name=card_name,
                     bank="HDFC Bank", source="credit_card_pdf",
                 ))
+            except Exception as e:
+                logging.error(f"Failed to parse transaction: {e}")
+
+        # Also try the non-time format: DD/MM/YYYY DESCRIPTION C AMOUNT
+        if not transactions:
+            pattern2 = re.compile(
+                r"(\d{2}/\d{2}/\d{4})\s+"
+                r"(.+?)\s+"
+                r"C\s*([\d,]+\.\d{2})[^\d\n]*",
+                re.IGNORECASE,
+            )
+            for m in pattern2.finditer(full_text):
+                try:
+                    dt = datetime.strptime(m.group(1), "%d/%m/%Y").date()
+                    desc = m.group(2).strip()
+                    amount = self._clean_amount(m.group(3))
+                    if amount == 0:
+                        continue
+                    if desc.upper().startswith("ADJ"):
+                        is_credit = False
+                    else:
+                        is_credit = any(kw in desc.upper() for kw in [
+                            "PAYMENT", "CASHBACK", "REFUND", "CREDIT",
+                        ])
+                    txn_type = "credit" if is_credit else "debit"
+                    transactions.append(ParsedTransaction(
+                        date=dt, description=desc, amount=amount,
+                        type=txn_type, account_name=card_name,
+                        bank="HDFC Bank", source="credit_card_pdf",
+                    ))
+                except Exception as e:
+                    logging.error(f"Failed to parse transaction: {e}")
 
         return transactions
 
@@ -564,6 +578,11 @@ class HSBCParser(BaseParser):
             r"([\d,]+\.\d{2})\s*(CR)?",
             re.IGNORECASE,
         )
+        # Matches installment detail lines like "1ST OF 6 INSTALLMENTS PRINCIPAL"
+        installment_re = re.compile(
+            r"\d+(?:ST|ND|RD|TH)\s+OF\s+\d+\s+INSTALLMENTS\s+\w+",
+            re.IGNORECASE,
+        )
         for m in pattern.finditer(full_text):
             day = int(m.group(1))
             month_num = months_map.get(m.group(2).upper(), 1)
@@ -575,6 +594,26 @@ class HSBCParser(BaseParser):
 
             if amount == 0:
                 continue
+
+            # Check if the IMMEDIATELY NEXT line after this match is an installment
+            # detail, e.g. "1ST OF 6 INSTALLMENTS PRINCIPAL".
+            # Note: \s* in the pattern can consume a trailing \n, so m.end() may
+            # already be at the start of the next line. Take the first non-empty
+            # line from m.end() to find the true immediate successor.
+            first_next = next(
+                (ln.strip() for ln in full_text[m.end():].split('\n') if ln.strip()),
+                "",
+            )
+            inst_m = installment_re.match(first_next)
+            if inst_m:
+                if is_credit:
+                    # Skip the CR (accounting reversal) version of installment entries.
+                    # HSBC shows each installment as a CR+debit pair; only the debit
+                    # is the real monthly charge.
+                    continue
+                # Append installment detail to description for clarity and unique hashing
+                desc = f"{desc} {inst_m.group(0).strip()}"
+                is_credit = False  # installment charges are always debits
 
             # Skip summary/total lines
             if any(kw in desc.upper() for kw in ["TOTAL PURCHASE", "TOTAL CASH", "TOTAL BALANCE", "TOTAL LOAN", "NET OUTSTANDING"]):

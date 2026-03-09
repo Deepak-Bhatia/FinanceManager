@@ -24,3 +24,6 @@ input/
 
 # Logs
 *.log
+
+# Claude Code skills
+skills/

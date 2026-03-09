@@ -18,6 +18,7 @@ import calendar
 from app.parsers.pdf_parser import detect_and_parse
 from app.parsers.excel_parser import ExcelParser
 from app.services.categorizer import categorize_transaction
+from app.services.auto_tagger import run_auto_tag
 from app.models.audit_log import AuditLog
 
 excel_parser = ExcelParser()
@@ -51,13 +52,10 @@ def _get_or_create_account(db: Session, name: str, bank: str, acct_type: str = "
     return account.id
 
 
-def _is_duplicate(db: Session, txn_date, description: str, amount: float, account_id: int) -> bool:
-    """Check if a similar transaction already exists."""
-    return db.query(Transaction).filter(
-        Transaction.date == txn_date,
-        Transaction.description == description,
-        Transaction.amount == amount,
-        Transaction.account_id == account_id,
+def _is_duplicate(db: Session, txn_hash: str) -> bool:
+    """Check if a transaction with this hash already exists in the metadata table."""
+    return db.query(TransactionMetadata).filter(
+        TransactionMetadata.transaction_hash == txn_hash,
     ).first() is not None
 
 
@@ -75,6 +73,11 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
         "errors": [],
         "details": [],
     }
+
+    # Track hashes added to the session but not yet committed, to prevent
+    # UNIQUE constraint failures when autoflush=False (duplicates within a session
+    # won't be caught by _is_duplicate which queries the DB).
+    seen_hashes: set = set()
 
     for file_path in sorted(folder_path.iterdir()):
         if not file_path.is_file():
@@ -101,13 +104,13 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
                 acct_type = "savings" if p.source == "savings_pdf" else "credit_card"
                 account_id = _get_or_create_account(db, p.account_name, p.bank, acct_type)
 
-                if _is_duplicate(db, p.date, p.description, p.amount, account_id):
+                txn_hash = compute_transaction_hash(p.date, p.description, p.amount)
+                if txn_hash in seen_hashes or _is_duplicate(db, txn_hash):
                     skipped += 1
                     continue
 
                 category_id = categorize_transaction(db, p.description)
 
-                txn_hash = compute_transaction_hash(p.date, p.description, p.amount)
                 txn = Transaction(
                     transaction_hash=txn_hash,
                     date=p.date,
@@ -125,6 +128,7 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
                 # persist metadata (category/tags)
                 meta = TransactionMetadata(transaction_hash=txn_hash, category_id=category_id)
                 db.add(meta)
+                seen_hashes.add(txn_hash)
                 added += 1
 
             # Save EMI details
@@ -193,8 +197,8 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
                 # Avoid duplicate transaction rows
                 if monthly_amount is None:
                     continue
-                if not _is_duplicate(db, txn_date, emi_desc, monthly_amount, account_id):
-                    txn_hash = compute_transaction_hash(txn_date, emi_desc, monthly_amount)
+                txn_hash = compute_transaction_hash(txn_date, emi_desc, monthly_amount)
+                if txn_hash not in seen_hashes and not _is_duplicate(db, txn_hash):
                     txn = Transaction(
                         transaction_hash=txn_hash,
                         date=txn_date,
@@ -211,7 +215,12 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
                     )
                     db.add(txn)
                     db.add(TransactionMetadata(transaction_hash=txn_hash, category_id=None))
+                    seen_hashes.add(txn_hash)
                     emi_txn_added += 1
+
+            # Flush so that subsequent _is_duplicate checks in the same session
+            # can see transactions added by this file (autoflush=False on session).
+            db.flush()
 
             message = f"Parsed {len(parsed)} transactions, added {added}, skipped {skipped} duplicates, {emi_added} EMI details, {emi_txn_added} EMI transactions"
 
@@ -260,5 +269,9 @@ def ingest_folder(db: Session, folder_name: str) -> Dict[str, Any]:
         }),
     ))
     db.commit()
+
+    # Auto-tag all transactions after ingestion
+    tag_result = run_auto_tag(db)
+    results["auto_tag"] = tag_result
 
     return results
