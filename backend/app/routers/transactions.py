@@ -14,6 +14,7 @@ from app.models.account import Account
 from app.models.audit_log import AuditLog
 from app.models.category import Category
 from app.models.emi_attachment import EmiAttachment
+from app.services.aggregator import _apply_ignore_filter
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
@@ -50,8 +51,9 @@ def list_transactions(
     txn_type: Optional[str] = Query(None, alias="type"),
     search: Optional[str] = Query(None),
     tag: Optional[str] = Query(None),
+    hide_ignored: bool = Query(True),
     page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
+    per_page: int = Query(50, ge=1, le=5000),
     db: Session = Depends(get_db),
 ):
     """List transactions with optional filters and pagination."""
@@ -61,7 +63,10 @@ def list_transactions(
     if year:
         q = q.filter(Transaction.year == year)
     if category_id:
-        q = q.join(TransactionMetadata, Transaction.transaction_hash == TransactionMetadata.transaction_hash).filter(TransactionMetadata.category_id == category_id)
+        cat_q = db.query(TransactionMetadata.transaction_hash).filter(
+            TransactionMetadata.category_id == category_id
+        ).subquery()
+        q = q.filter(Transaction.transaction_hash.in_(cat_q))
     if account_id:
         q = q.filter(Transaction.account_id == account_id)
     if account_type:
@@ -75,6 +80,8 @@ def list_transactions(
             TransactionMetadata.tags.ilike(f"%{tag}%")
         ).subquery()
         q = q.filter(Transaction.transaction_hash.in_(meta_q))
+
+    q = _apply_ignore_filter(q, hide_ignored)
 
     total = q.count()
     total_income = q.filter(Transaction.type == "credit").with_entities(func.sum(Transaction.amount)).scalar() or 0

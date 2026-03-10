@@ -3,12 +3,10 @@ import { getTransactions, getCategories, updateTransaction, deleteTransaction } 
 import TransactionGrid from '../components/TransactionGrid';
 import ConfirmModal from '../components/ConfirmModal';
 
-export default function DashboardTransactionsGrid({ month, year }: { month: number, year: number }) {
+export default function DashboardTransactionsGrid({ month, year, hideIgnored = true }: { month: number, year: number, hideIgnored?: boolean }) {
   const [data, setData] = useState<any>({ items: [], total: 0, per_page: 50 });
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editCatId, setEditCatId] = useState<number | null>(null);
   const [editTags, setEditTags] = useState<string>('');
@@ -16,11 +14,13 @@ export default function DashboardTransactionsGrid({ month, year }: { month: numb
 
   useEffect(() => { getCategories().then(setCategories); }, []);
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
-    getTransactions({ month, year, page: 1, per_page: 50 })
-      .then(setData)
-      .finally(() => setLoading(false));
-  }, [month, year]);
+    getTransactions({ month, year, page: 1, per_page: 1000, hide_ignored: hideIgnored })
+      .then(d => { if (!controller.signal.aborted) setData(d); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [month, year, hideIgnored]);
 
   const startEditing = (t: any) => {
     setEditingId(t.id);
@@ -69,9 +69,6 @@ export default function DashboardTransactionsGrid({ month, year }: { month: numb
           items={data.items}
           categories={categories}
           loading={loading}
-          sortKey={sortKey}
-          sortDir={sortDir}
-          onSortChange={setSortKey}
           editingId={editingId}
           editCatId={editCatId}
           editTags={editTags}
@@ -83,7 +80,7 @@ export default function DashboardTransactionsGrid({ month, year }: { month: numb
           onDelete={handleDelete}
           showActions={true}
           initialShowRecent={false}
-          initialShowTop={true}
+          initialShowTop={false}
         />
       </div>
 

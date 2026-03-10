@@ -22,6 +22,12 @@ export const getTopMerchants = (params: Record<string, any>) =>
   api.get('/dashboard/top-merchants', { params }).then(r => r.data);
 export const getByAccount = (params: Record<string, any>) =>
   api.get('/dashboard/by-account', { params }).then(r => r.data);
+export const getByTag = (params: Record<string, any>) =>
+  api.get('/dashboard/by-tag', { params }).then(r => r.data);
+export const getRecurringVsImpulsive = (params: Record<string, any>) =>
+  api.get('/dashboard/recurring-vs-impulsive', { params }).then(r => r.data);
+export const getUncategorizedTop = (params: Record<string, any>) =>
+  api.get('/dashboard/uncategorized-top', { params }).then(r => r.data);
 
 export const getCategories = () => api.get('/categories').then(r => r.data);
 export const createCategory = (data: { name: string; color?: string; icon?: string }) =>

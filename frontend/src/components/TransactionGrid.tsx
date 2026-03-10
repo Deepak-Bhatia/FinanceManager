@@ -91,6 +91,7 @@ export default function TransactionGrid({
 
   // Filter/search
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'credit' | 'debit'>('all');
   const [showRecent, setShowRecent] = useState(initialShowRecent ?? true);
   const [showTop, setShowTop] = useState(initialShowTop ?? false);
 
@@ -120,6 +121,9 @@ export default function TransactionGrid({
       (t.tags && t.tags.toLowerCase().includes(s)) ||
       (t.source_file && t.source_file.toLowerCase().includes(s))
     );
+  }
+  if (typeFilter !== 'all') {
+    filtered = filtered.filter(t => (t.type || '').toLowerCase() === typeFilter);
   }
   if (sortKey) {
     filtered = [...filtered].sort((a, b) => {
@@ -213,6 +217,27 @@ export default function TransactionGrid({
         <label className="inline-flex items-center gap-1 text-xs cursor-pointer">
           <input type="checkbox" checked={showTop} onChange={e => setShowTop(e.target.checked)} /> Top 20 Spends
         </label>
+
+        {/* Credit / Debit filter */}
+        <div className="inline-flex rounded-lg border border-[var(--border)] overflow-hidden text-xs">
+          {(['all', 'credit', 'debit'] as const).map(v => (
+            <button
+              key={v}
+              onClick={() => setTypeFilter(v)}
+              className={`px-3 py-1 capitalize transition-colors ${
+                typeFilter === v
+                  ? v === 'credit'
+                    ? 'bg-green-600 text-white'
+                    : v === 'debit'
+                      ? 'bg-red-600 text-white'
+                      : 'bg-[var(--accent)] text-white'
+                  : 'bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]'
+              }`}
+            >
+              {v === 'all' ? 'All' : v}
+            </button>
+          ))}
+        </div>
 
         <div className="flex items-center gap-2 ml-auto">
           {/* Mark as EMI — visible only when rows are selected */}
