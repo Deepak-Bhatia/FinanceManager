@@ -64,6 +64,8 @@ export const getAuditLogs = (params: Record<string, any>) =>
   api.get('/audit', { params }).then(r => r.data);
 
 // Accounts
+export const getAccounts = (params?: Record<string, any>) =>
+  api.get('/accounts', { params }).then(r => r.data);
 export const patchAccount = (id: number, data: { glyph?: string; nickname?: string }) =>
   api.patch(`/accounts/${id}`, data).then(r => r.data);
 

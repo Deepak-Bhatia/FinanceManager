@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Receipt, FolderUp, Tags, CreditCard, CalendarClock, Wallet, ClipboardList, Tag } from 'lucide-react';
+import { LayoutDashboard, Receipt, FolderUp, Tags, CreditCard, CalendarClock, Wallet, ClipboardList, Tag, Banknote } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Upload from './pages/Upload';
 import Categories from './pages/Categories';
 import CreditCards from './pages/CreditCards';
+import DebitCards from './pages/DebitCards';
 import EMIs from './pages/EMIs';
 import CardDetails from './pages/CardDetails';
 import Audit from './pages/Audit';
@@ -25,6 +26,7 @@ function App() {
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/creditcards', icon: CreditCard, label: 'Credit Cards' },
+    { to: '/debitcards', icon: Banknote, label: 'Debit Cards' },
     { to: '/emis', icon: CalendarClock, label: 'EMIs' },
     { to: '/mycards', icon: Wallet, label: 'My Cards' },
     { to: '/transactions', icon: Receipt, label: 'Transactions' },
@@ -80,6 +82,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/creditcards" element={<CreditCards />} />
+            <Route path="/debitcards" element={<DebitCards />} />
             <Route path="/emis" element={<EMIs />} />
             <Route path="/mycards" element={<CardDetails />} />
             <Route path="/transactions" element={<Transactions />} />

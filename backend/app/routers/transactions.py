@@ -70,7 +70,8 @@ def list_transactions(
     if account_id:
         q = q.filter(Transaction.account_id == account_id)
     if account_type:
-        q = q.join(Account, Transaction.account_id == Account.id).filter(Account.type == account_type)
+        types = [t.strip() for t in account_type.split(',') if t.strip()]
+        q = q.join(Account, Transaction.account_id == Account.id).filter(Account.type.in_(types))
     if txn_type:
         q = q.filter(Transaction.type == txn_type)
     if search:

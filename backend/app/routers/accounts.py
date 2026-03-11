@@ -13,6 +13,19 @@ from app.models.account import Account
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
 
+@router.get("")
+def list_accounts(type: Optional[str] = None, db: Session = Depends(get_db)):
+    q = db.query(Account)
+    if type:
+        types = [t.strip() for t in type.split(',') if t.strip()]
+        if types:
+            q = q.filter(Account.type.in_(types))
+    return [
+        {"id": a.id, "name": a.name, "type": a.type, "bank": a.bank, "glyph": a.glyph, "nickname": a.nickname}
+        for a in q.order_by(Account.name).all()
+    ]
+
+
 class AccountPatch(BaseModel):
     glyph: Optional[str] = None
     nickname: Optional[str] = None
